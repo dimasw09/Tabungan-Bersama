@@ -148,8 +148,26 @@ export default function MembersPage() {
 
     if (!editingId) return;
 
-    if (Number(form.monthly_amount) <= 0 || Number(form.payday) < 1 || Number(form.payday) > 31) {
-      toast({ title: 'Data anggota belum valid', message: 'Nominal harus lebih dari 0 dan tanggal setor harus 1 sampai 31.', type: 'error' });
+    const monthlyAmount = Number(form.monthly_amount);
+    const payday = Number(form.payday);
+
+    if (!Number.isFinite(monthlyAmount) || monthlyAmount <= 0) {
+      toast({ title: 'Data anggota belum valid', message: 'Nominal setoran wajib harus lebih dari 0.', type: 'error' });
+      return;
+    }
+
+    if (monthlyAmount > 1_000_000_000) {
+      toast({ title: 'Nominal terlalu besar', message: 'Maksimal 1 miliar per anggota.', type: 'error' });
+      return;
+    }
+
+    if (!Number.isInteger(payday) || payday < 1 || payday > 31) {
+      toast({ title: 'Tanggal setor belum valid', message: 'Tanggal setor harus angka bulat 1 sampai 31.', type: 'error' });
+      return;
+    }
+
+    if (!/^#[0-9A-F]{6}$/i.test(form.color)) {
+      toast({ title: 'Warna label belum valid', message: 'Gunakan format warna HEX, contoh #E3A2C8.', type: 'error' });
       return;
     }
 
@@ -158,8 +176,8 @@ export default function MembersPage() {
       const { error } = await supabase
         .from('members')
         .update({
-          monthly_amount: Number(form.monthly_amount),
-          payday: Number(form.payday),
+          monthly_amount: monthlyAmount,
+          payday,
           color: form.color
         })
         .eq('id', editingId);
@@ -168,7 +186,7 @@ export default function MembersPage() {
 
       let syncedRows = 0;
       if (syncUnpaid) {
-        syncedRows = await syncUnpaidDeposits(editingId, Number(form.monthly_amount), Number(form.payday));
+        syncedRows = await syncUnpaidDeposits(editingId, monthlyAmount, payday);
       }
 
       toast({

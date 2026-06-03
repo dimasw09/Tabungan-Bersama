@@ -15,7 +15,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 
 function SummaryCard({ label, value, helper }: { label: string; value: string; helper?: string }) {
   return (
-    <div className="rounded-[1.5rem] bg-white/65 p-4 shadow-sm">
+    <div className="rounded-[1.5rem] bg-white/70 p-4 shadow-sm">
       <p className="text-xs font-black uppercase tracking-wide text-stone-400">{label}</p>
       <p className="mt-1 text-xl font-black text-stone-900">{value}</p>
       {helper ? <p className="mt-1 text-xs font-bold text-stone-400">{helper}</p> : null}

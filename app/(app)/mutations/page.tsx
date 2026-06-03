@@ -2,10 +2,11 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
-import type { MutationType, OtherMutation } from '@/lib/types';
+import type { MutationType, MonthlyDeposit, OtherMutation } from '@/lib/types';
 import { currentYearMonth, formatDate, rupiah, todayInput } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -21,16 +22,31 @@ const emptyForm = {
 function SummaryCard({ label, value, tone = 'neutral' }: { label: string; value: string; tone?: 'neutral' | 'green' | 'red' }) {
   const toneClass = tone === 'green' ? 'text-stone-800' : tone === 'red' ? 'text-stone-800' : 'text-stone-900';
   return (
-    <div className="rounded-[1.5rem] bg-white/65 p-4 shadow-sm">
+    <div className="rounded-[1.5rem] bg-white/70 p-4 shadow-sm">
       <p className="text-xs font-black uppercase tracking-wide text-stone-400">{label}</p>
       <p className={`mt-1 text-xl font-black ${toneClass}`}>{value}</p>
     </div>
   );
 }
 
+type ConfirmAction = {
+  title: string;
+  description?: string;
+  confirmLabel?: string;
+  tone?: 'danger' | 'primary';
+  onConfirm: () => Promise<void> | void;
+};
+
+function isValidDateText(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00`);
+  return !Number.isNaN(date.getTime()) && value === date.toISOString().slice(0, 10);
+}
+
 export default function MutationsPage() {
   const { toast } = useToast();
   const [mutations, setMutations] = useState<OtherMutation[]>([]);
+  const [deposits, setDeposits] = useState<MonthlyDeposit[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [editing, setEditing] = useState<OtherMutation | null>(null);
   const [loading, setLoading] = useState(true);
@@ -39,18 +55,24 @@ export default function MutationsPage() {
   const [filterMonth, setFilterMonth] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [search, setSearch] = useState('');
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   async function fetchMutations(showLoading = true) {
     if (showLoading) setLoading(true);
-    const { data, error } = await supabase.from('other_mutations').select('*').order('mutation_date', { ascending: false });
+    const [mutationsResult, depositsResult] = await Promise.all([
+      supabase.from('other_mutations').select('*').order('mutation_date', { ascending: false }),
+      supabase.from('monthly_deposits').select('*')
+    ]);
     if (showLoading) setLoading(false);
 
-    if (error) {
-      toast({ title: 'Gagal ambil mutasi', message: error.message, type: 'error' });
+    if (mutationsResult.error || depositsResult.error) {
+      toast({ title: 'Gagal ambil data', message: mutationsResult.error?.message || depositsResult.error?.message, type: 'error' });
       return;
     }
 
-    setMutations((data || []) as OtherMutation[]);
+    setMutations((mutationsResult.data || []) as OtherMutation[]);
+    setDeposits((depositsResult.data || []) as MonthlyDeposit[]);
   }
 
   useEffect(() => {
@@ -96,6 +118,28 @@ export default function MutationsPage() {
     };
   }, [filteredMutations]);
 
+  const currentBalance = useMemo(() => {
+    const depositsTotal = deposits.reduce((sum, deposit) => sum + Number(deposit.paid_amount || 0), 0);
+    const additions = mutations.filter((item) => item.type === 'Tambah').reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const withdrawals = mutations.filter((item) => item.type === 'Penarikan').reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    return depositsTotal + additions - withdrawals;
+  }, [deposits, mutations]);
+
+  async function runConfirmAction() {
+    if (!confirmAction) return;
+
+    setConfirmLoading(true);
+    try {
+      await confirmAction.onConfirm();
+      setConfirmAction(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Terjadi error tidak diketahui.';
+      toast({ title: 'Aksi gagal', message, type: 'error' });
+    } finally {
+      setConfirmLoading(false);
+    }
+  }
+
   function resetForm() {
     setForm(emptyForm);
     setEditing(null);
@@ -122,8 +166,53 @@ export default function MutationsPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!form.mutation_date || !form.type || Number(form.amount) <= 0) {
-      toast({ title: 'Data mutasi belum valid', message: 'Tanggal, tipe, dan nominal wajib diisi lebih dari 0.', type: 'error' });
+    const amount = Number(form.amount);
+    const description = form.description.trim();
+
+    if (!form.mutation_date || !isValidDateText(form.mutation_date)) {
+      toast({ title: 'Tanggal mutasi belum valid', message: 'Tanggal wajib diisi dengan format tanggal valid.', type: 'error' });
+      return;
+    }
+
+    if (form.mutation_date > todayInput()) {
+      toast({ title: 'Tanggal mutasi belum valid', message: 'Tanggal mutasi tidak boleh lebih dari hari ini.', type: 'error' });
+      return;
+    }
+
+    if (!['Tambah', 'Penarikan'].includes(form.type)) {
+      toast({ title: 'Tipe mutasi belum valid', message: 'Tipe harus Tambah atau Penarikan.', type: 'error' });
+      return;
+    }
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast({ title: 'Nominal mutasi belum valid', message: 'Nominal wajib lebih dari 0.', type: 'error' });
+      return;
+    }
+
+    if (amount > 1_000_000_000) {
+      toast({ title: 'Nominal terlalu besar', message: 'Cek lagi nominalnya, maksimal 1 miliar per mutasi.', type: 'error' });
+      return;
+    }
+
+    if (description.length > 160) {
+      toast({ title: 'Keterangan terlalu panjang', message: 'Maksimal 160 karakter biar rekap tetap rapi.', type: 'error' });
+      return;
+    }
+
+    const balanceWithoutCurrentMutation = (() => {
+      const depositsTotal = deposits.reduce((sum, deposit) => sum + Number(deposit.paid_amount || 0), 0);
+      const otherRows = mutations.filter((mutation) => mutation.id !== editing?.id);
+      const additions = otherRows.filter((item) => item.type === 'Tambah').reduce((sum, item) => sum + Number(item.amount || 0), 0);
+      const withdrawals = otherRows.filter((item) => item.type === 'Penarikan').reduce((sum, item) => sum + Number(item.amount || 0), 0);
+      return depositsTotal + additions - withdrawals;
+    })();
+
+    if (form.type === 'Penarikan' && amount > balanceWithoutCurrentMutation) {
+      toast({
+        title: 'Saldo tidak cukup',
+        message: `Saldo tersedia ${rupiah(balanceWithoutCurrentMutation)}, penarikan tidak boleh lebih besar dari saldo.`,
+        type: 'error'
+      });
       return;
     }
 
@@ -131,8 +220,8 @@ export default function MutationsPage() {
     const payload = {
       mutation_date: form.mutation_date,
       type: form.type,
-      amount: Number(form.amount),
-      description: form.description.trim() || null
+      amount,
+      description: description || null
     };
 
     const result = editing
@@ -151,17 +240,20 @@ export default function MutationsPage() {
     fetchMutations(false);
   }
 
-  async function deleteMutation(mutation: OtherMutation) {
-    if (!window.confirm(`Hapus mutasi ${mutation.type} ${rupiah(mutation.amount)}?`)) return;
+  function deleteMutation(mutation: OtherMutation) {
+    setConfirmAction({
+      title: 'Hapus mutasi?',
+      description: `Mutasi ${mutation.type} ${rupiah(mutation.amount)} tanggal ${formatDate(mutation.mutation_date)} akan dihapus permanen dan saldo rekap ikut berubah.`,
+      confirmLabel: 'Ya, hapus mutasi',
+      tone: 'danger',
+      onConfirm: async () => {
+        const { error } = await supabase.from('other_mutations').delete().eq('id', mutation.id);
+        if (error) throw error;
 
-    const { error } = await supabase.from('other_mutations').delete().eq('id', mutation.id);
-    if (error) {
-      toast({ title: 'Gagal hapus mutasi', message: error.message, type: 'error' });
-      return;
-    }
-
-    toast({ title: 'Mutasi berhasil dihapus', type: 'success' });
-    fetchMutations(false);
+        toast({ title: 'Mutasi berhasil dihapus', type: 'success' });
+        fetchMutations(false);
+      }
+    });
   }
 
   if (loading) return <LoadingState />;
@@ -230,10 +322,11 @@ export default function MutationsPage() {
         </Card>
 
         <Card>
-          <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <SummaryCard label="Tambah" value={rupiah(summary.additions)} tone="green" />
             <SummaryCard label="Penarikan" value={rupiah(summary.withdrawals)} tone="red" />
             <SummaryCard label="Net" value={rupiah(summary.net)} tone={summary.net < 0 ? 'red' : 'green'} />
+            <SummaryCard label="Saldo sekarang" value={rupiah(currentBalance)} tone={currentBalance < 0 ? 'red' : 'green'} />
             <SummaryCard label="Jumlah data" value={`${summary.count}`} />
           </div>
 
@@ -333,6 +426,18 @@ export default function MutationsPage() {
           )}
         </Card>
       </div>
+
+      <ConfirmDialog
+        open={Boolean(confirmAction)}
+        title={confirmAction?.title || ''}
+        description={confirmAction?.description}
+        confirmLabel={confirmAction?.confirmLabel}
+        tone={confirmAction?.tone}
+        loading={confirmLoading}
+        onClose={() => (confirmLoading ? undefined : setConfirmAction(null))}
+        onConfirm={runConfirmAction}
+      />
+
     </main>
   );
 }

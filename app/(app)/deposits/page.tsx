@@ -17,6 +17,7 @@ import { buildMonthlyDepositRows } from '@/lib/generate';
 import { currentYearMonth, formatDate, monthLabel, rupiah, safeDueDate, todayInput } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Modal } from '@/components/ui/Modal';
@@ -77,12 +78,54 @@ function ProofThumbnail({ path, onPreview }: { path: string | null; onPreview: (
 
 function MiniSummaryCard({ label, value, helper }: { label: string; value: string; helper?: string }) {
   return (
-    <div className="rounded-[1.5rem] bg-white/65 p-4 shadow-sm">
+    <div className="rounded-[1.5rem] bg-white/70 p-4 shadow-sm">
       <p className="text-xs font-black uppercase tracking-wide text-stone-400">{label}</p>
       <p className="mt-1 text-lg font-black text-stone-900">{value}</p>
       {helper ? <p className="mt-1 text-xs font-bold text-stone-400">{helper}</p> : null}
     </div>
   );
+}
+
+type ConfirmAction = {
+  title: string;
+  description?: string;
+  confirmLabel?: string;
+  tone?: 'danger' | 'primary';
+  onConfirm: () => Promise<void> | void;
+};
+
+function isValidDateText(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00`);
+  return !Number.isNaN(date.getTime()) && value === date.toISOString().slice(0, 10);
+}
+
+function dateInSelectedMonth(dateText: string, year: number, month: number) {
+  if (!isValidDateText(dateText)) return false;
+  const [dateYear, dateMonth] = dateText.split('-').map(Number);
+  return dateYear === year && dateMonth === month;
+}
+
+function validateDepositForm(form: typeof emptyForm) {
+  const year = Number(form.year);
+  const month = Number(form.month);
+  const requiredAmount = Number(form.required_amount);
+  const paidAmount = Number(form.paid_amount || 0);
+
+  if (!form.member_id) return 'Anggota wajib dipilih.';
+  if (!Number.isInteger(year) || year < 2026 || year > 2100) return 'Tahun harus angka valid minimal 2026.';
+  if (!Number.isInteger(month) || month < 1 || month > 12) return 'Bulan harus di antara 1 sampai 12.';
+  if (!form.due_date || !isValidDateText(form.due_date)) return 'Tanggal jatuh tempo wajib diisi dengan format tanggal valid.';
+  if (!dateInSelectedMonth(form.due_date, year, month)) return 'Tanggal jatuh tempo harus berada di bulan dan tahun setoran yang dipilih.';
+  if (!Number.isFinite(requiredAmount) || requiredAmount <= 0) return 'Nominal wajib harus lebih dari 0.';
+  if (!Number.isFinite(paidAmount) || paidAmount < 0) return 'Nominal masuk tidak boleh kosong/minus.';
+  if (paidAmount > 0 && !form.actual_transfer_date) return 'Tanggal transfer aktual wajib diisi kalau nominal masuk sudah diisi.';
+  if (form.actual_transfer_date && !isValidDateText(form.actual_transfer_date)) return 'Tanggal transfer aktual tidak valid.';
+  if (form.actual_transfer_date && form.actual_transfer_date > today) return 'Tanggal transfer aktual tidak boleh lebih dari hari ini.';
+  if (form.proofFile && !form.proofFile.type.startsWith('image/')) return 'Foto bukti TF wajib berupa file gambar.';
+  if (form.proofFile && form.proofFile.size > 5 * 1024 * 1024) return 'Ukuran foto bukti TF maksimal 5MB.';
+
+  return null;
 }
 
 export default function DepositsPage() {
@@ -102,6 +145,8 @@ export default function DepositsPage() {
   const [filterMonth, setFilterMonth] = useState('all');
   const [filterMember, setFilterMember] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   async function fetchData(showLoading = true) {
     if (showLoading) setLoading(true);
@@ -231,6 +276,21 @@ export default function DepositsPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  async function runConfirmAction() {
+    if (!confirmAction) return;
+
+    setConfirmLoading(true);
+    try {
+      await confirmAction.onConfirm();
+      setConfirmAction(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Terjadi error tidak diketahui.';
+      toast({ title: 'Aksi gagal', message, type: 'error' });
+    } finally {
+      setConfirmLoading(false);
+    }
+  }
+
   function validateFile(file: File) {
     const maxMb = 5;
     if (!file.type.startsWith('image/')) throw new Error('File bukti transfer harus gambar.');
@@ -258,13 +318,9 @@ export default function DepositsPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!form.member_id || !form.year || !form.month || !form.due_date || Number(form.required_amount) <= 0) {
-      toast({ title: 'Data setoran belum valid', message: 'Anggota, bulan, jatuh tempo, dan nominal wajib harus diisi.', type: 'error' });
-      return;
-    }
-
-    if (Number(form.paid_amount) < 0) {
-      toast({ title: 'Nominal masuk belum valid', message: 'Nominal masuk tidak boleh minus.', type: 'error' });
+    const validationMessage = validateDepositForm(form);
+    if (validationMessage) {
+      toast({ title: 'Data setoran belum valid', message: validationMessage, type: 'error' });
       return;
     }
 
@@ -289,6 +345,23 @@ export default function DepositsPage() {
       };
 
       if (editing) {
+        const { data: duplicateRows, error: duplicateError } = await supabase
+          .from('monthly_deposits')
+          .select('id')
+          .eq('member_id', payload.member_id)
+          .eq('year', payload.year)
+          .eq('month', payload.month)
+          .neq('id', editing.id);
+
+        if (duplicateError) throw duplicateError;
+        if ((duplicateRows || []).length > 0) {
+          toast({
+            title: 'Periode sudah ada',
+            message: 'Tidak bisa memindahkan setoran ini karena anggota + bulan + tahun tersebut sudah punya data.',
+            type: 'error'
+          });
+          return;
+        }
         let proofPath = editing.proof_image_url;
         if (form.proofFile) proofPath = await uploadProof(form.proofFile, editing.id, editing.proof_image_url);
         const { error } = await supabase.from('monthly_deposits').update({ ...payload, proof_image_url: proofPath }).eq('id', editing.id);
@@ -348,24 +421,31 @@ export default function DepositsPage() {
     fetchData(false);
   }
 
-  async function deleteDeposit(deposit: MonthlyDeposit) {
-    if (!window.confirm(`Hapus setoran ${deposit.members?.name || ''} ${monthLabel(deposit.year, deposit.month)}?`)) return;
+  function deleteDeposit(deposit: MonthlyDeposit) {
+    const hasPayment = Number(deposit.paid_amount || 0) > 0;
+    const hasProof = Boolean(deposit.proof_image_url);
 
-    if (deposit.proof_image_url && !deposit.proof_image_url.startsWith('http')) {
-      await supabase.storage.from('transfer-proofs').remove([deposit.proof_image_url]);
-    }
+    setConfirmAction({
+      title: 'Hapus setoran?',
+      description: `Setoran ${deposit.members?.name || 'Anggota'} ${monthLabel(deposit.year, deposit.month)} akan dihapus permanen.${hasPayment ? ' Nominal masuk yang sudah tercatat juga ikut hilang.' : ''}${hasProof ? ' Foto bukti TF juga akan dihapus dari Storage.' : ''}`,
+      confirmLabel: 'Ya, hapus setoran',
+      tone: 'danger',
+      onConfirm: async () => {
+        if (deposit.proof_image_url && !deposit.proof_image_url.startsWith('http')) {
+          const { error: storageError } = await supabase.storage.from('transfer-proofs').remove([deposit.proof_image_url]);
+          if (storageError) throw storageError;
+        }
 
-    const { error } = await supabase.from('monthly_deposits').delete().eq('id', deposit.id);
-    if (error) {
-      toast({ title: 'Gagal hapus setoran', message: error.message, type: 'error' });
-      return;
-    }
+        const { error } = await supabase.from('monthly_deposits').delete().eq('id', deposit.id);
+        if (error) throw error;
 
-    toast({ title: 'Setoran berhasil dihapus', type: 'success' });
-    fetchData(false);
+        toast({ title: 'Setoran berhasil dihapus', type: 'success' });
+        fetchData(false);
+      }
+    });
   }
 
-  async function generate(rowsType: '24-months' | 'year' | 'current-month') {
+  async function runGenerate(rowsType: '24-months' | 'year' | 'current-month') {
     if (members.length === 0) {
       toast({ title: 'Belum ada anggota', message: 'Jalankan SQL seed dulu supaya Kakak dan Mpip ada.', type: 'error' });
       return;
@@ -389,6 +469,28 @@ export default function DepositsPage() {
 
     toast({ title: 'Generate setoran selesai', message: 'Periode yang sudah ada otomatis dilewati.', type: 'success' });
     fetchData(false);
+  }
+
+  function generate(rowsType: '24-months' | 'year' | 'current-month') {
+    if (rowsType === 'year' && (!Number.isInteger(Number(generateYear)) || Number(generateYear) < 2026 || Number(generateYear) > 2100)) {
+      toast({ title: 'Tahun generate belum valid', message: 'Isi tahun antara 2026 sampai 2100.', type: 'error' });
+      return;
+    }
+
+    const label =
+      rowsType === '24-months'
+        ? '24 bulan mulai Juni 2026'
+        : rowsType === 'year'
+          ? `tahun ${generateYear}`
+          : 'bulan berjalan';
+
+    setConfirmAction({
+      title: 'Generate setoran?',
+      description: `Generate setoran ${label}. Data yang sudah ada tidak akan dibuat duplicate.`,
+      confirmLabel: 'Ya, generate',
+      tone: 'primary',
+      onConfirm: () => runGenerate(rowsType)
+    });
   }
 
   if (loading) return <LoadingState />;
@@ -669,6 +771,18 @@ export default function DepositsPage() {
           )}
         </Card>
       </div>
+
+
+      <ConfirmDialog
+        open={Boolean(confirmAction)}
+        title={confirmAction?.title || ''}
+        description={confirmAction?.description}
+        confirmLabel={confirmAction?.confirmLabel}
+        tone={confirmAction?.tone}
+        loading={confirmLoading}
+        onClose={() => (confirmLoading ? undefined : setConfirmAction(null))}
+        onConfirm={runConfirmAction}
+      />
 
       <Modal open={Boolean(previewUrl)} title="Preview Bukti Transfer" onClose={() => setPreviewUrl(null)}>
         {previewUrl ? <img src={previewUrl} alt="Preview bukti transfer" className="max-h-[75vh] w-full rounded-3xl object-contain" /> : null}
