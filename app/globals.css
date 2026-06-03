@@ -1,0 +1,115 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #f7f5f1;
+  --foreground: #4e4650;
+  --palette-pink: #E3A2C8;
+  --palette-pink-soft: #DFB2CB;
+  --palette-cream: #D9D8D3;
+  --palette-blue-soft: #B4C6E2;
+  --palette-blue: #A4BBE0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(227, 162, 200, 0.28) 0%,
+      rgba(227, 162, 200, 0.28) 20%,
+      rgba(223, 178, 203, 0.22) 20%,
+      rgba(223, 178, 203, 0.22) 40%,
+      rgba(217, 216, 211, 0.22) 40%,
+      rgba(217, 216, 211, 0.22) 60%,
+      rgba(180, 198, 226, 0.24) 60%,
+      rgba(180, 198, 226, 0.24) 80%,
+      rgba(164, 187, 224, 0.28) 80%,
+      rgba(164, 187, 224, 0.28) 100%
+    ),
+    radial-gradient(circle at 15% 20%, rgba(227, 162, 200, 0.45), transparent 24rem),
+    radial-gradient(circle at 85% 15%, rgba(164, 187, 224, 0.42), transparent 26rem),
+    linear-gradient(135deg, #fffafc 0%, #f5eff2 34%, #f2f0ea 56%, #edf3fb 100%);
+  color: var(--foreground);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.26) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.26) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.3), transparent 70%);
+}
+
+input[type='date']::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+::selection {
+  background: rgba(227, 162, 200, 0.38);
+}
+
+@layer components {
+  .form-label {
+    @apply text-sm font-black text-stone-700;
+  }
+
+  .form-input {
+    @apply w-full rounded-2xl border border-white/90 bg-white/90 px-4 py-3 text-sm font-semibold text-stone-800 shadow-sm outline-none transition placeholder:text-stone-400 focus:border-blush-300 focus:ring-4 focus:ring-blush-100;
+  }
+
+  .table-th {
+    @apply whitespace-nowrap px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-stone-500;
+  }
+
+  .table-td {
+    @apply whitespace-nowrap px-4 py-3 text-sm font-semibold text-stone-700;
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-full px-3 py-1 text-xs font-black;
+  }
+
+  .mobile-data-card {
+    @apply rounded-[1.75rem] border border-white/80 bg-white/80 p-4 shadow-sm backdrop-blur-xl;
+  }
+
+  .soft-panel {
+    @apply rounded-[2rem] border border-white/80 bg-white/75 shadow-soft backdrop-blur-xl;
+  }
+
+  .palette-chip {
+    @apply h-9 w-9 rounded-2xl border-2 border-white shadow-sm transition hover:scale-105;
+  }
+
+  .palette-strip {
+    background: linear-gradient(90deg, #E3A2C8 0 20%, #DFB2CB 20% 40%, #D9D8D3 40% 60%, #B4C6E2 60% 80%, #A4BBE0 80% 100%);
+  }
+
+  .palette-card {
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.84), rgba(255,255,255,0.66)),
+      linear-gradient(90deg, rgba(227,162,200,0.24), rgba(217,216,211,0.20), rgba(164,187,224,0.24));
+  }
+
+  .palette-hero {
+    background:
+      radial-gradient(circle at top left, rgba(227, 162, 200, 0.72), transparent 18rem),
+      radial-gradient(circle at bottom right, rgba(164, 187, 224, 0.68), transparent 20rem),
+      linear-gradient(135deg, rgba(227,162,200,0.46), rgba(217,216,211,0.38), rgba(164,187,224,0.48));
+  }
+}

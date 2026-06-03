@@ -1,0 +1,19 @@
+import type { Metadata } from 'next';
+import type { ReactNode } from 'react';
+import './globals.css';
+import { ToastProvider } from '@/components/ui/ToastProvider';
+
+export const metadata: Metadata = {
+  title: 'Tabungan Bersama Kakak & Mpip',
+  description: 'Tracking tabungan bersama pasangan Kakak dan Mpip.'
+};
+
+export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+  return (
+    <html lang="id">
+      <body>
+        <ToastProvider>{children}</ToastProvider>
+      </body>
+    </html>
+  );
+}
