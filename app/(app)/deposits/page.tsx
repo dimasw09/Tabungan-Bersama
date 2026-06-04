@@ -535,7 +535,8 @@ export default function DepositsPage() {
   }
 
   function resetPayment(row: DepositRow) {
-    if (!row.deposit) return;
+    const deposit = row.deposit;
+    if (!deposit) return;
 
     setConfirmAction({
       title: 'Reset setoran?',
@@ -556,7 +557,7 @@ export default function DepositsPage() {
             proof_image_url: null,
             status: 'Belum Dibayar'
           })
-          .eq('id', row.deposit.id);
+          .eq('id', deposit.id);
 
         if (error) throw error;
         toast({ title: 'Setoran berhasil direset', type: 'success' });
@@ -567,11 +568,11 @@ export default function DepositsPage() {
 
   function deleteDeposit(row: DepositRow | MonthlyDeposit) {
     const deposit = 'deposit' in row ? row.deposit : row;
-    const memberName = 'member' in row ? row.member.name : row.members?.name || 'Anggota';
-    const year = 'year' in row ? row.year : row.year;
-    const month = 'month' in row ? row.month : row.month;
-
     if (!deposit) return;
+
+    const memberName = 'member' in row ? row.member.name : row.members?.name || 'Anggota';
+    const year = deposit.year;
+    const month = deposit.month;
 
     const hasPayment = Number(deposit.paid_amount || 0) > 0;
     const hasProof = Boolean(deposit.proof_image_url);
