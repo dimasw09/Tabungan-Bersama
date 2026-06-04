@@ -5,7 +5,7 @@ import { ToastProvider } from '@/components/ui/ToastProvider';
 
 export const metadata: Metadata = {
   title: 'Tabungan Bersama Kakak & Mpip',
-  description: 'Tracking tabungan bersama pasangan Kakak dan Mpip.'
+  description: 'Catatan tabungan cinta Kakak dan Mpip.'
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

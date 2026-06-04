@@ -83,16 +83,16 @@ export default function RecapPage() {
   return (
     <main>
       <PageHeader
-        title="Rekap Bulanan"
-        description="Rekap otomatis berubah setiap setoran atau mutasi ditambah, diedit, atau dihapus. Saldo akhir bulan dihitung kumulatif dari bulan paling awal."
+        title="Jejak Tabungan Kita"
+        description="Lihat perjalanan tabungan Kakak & Mpip dari bulan ke bulan."
       />
 
       <Card>
         <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard label="Saldo terakhir" value={rupiah(recapSummary.latest?.endingBalance || 0)} helper={recapSummary.latest ? monthLabel(recapSummary.latest.year, recapSummary.latest.month) : 'Belum ada'} />
+          <SummaryCard label="Saldo cinta terakhir" value={rupiah(recapSummary.latest?.endingBalance || 0)} helper={recapSummary.latest ? monthLabel(recapSummary.latest.year, recapSummary.latest.month) : 'Belum ada'} />
           <SummaryCard label="Setoran masuk" value={rupiah(recapSummary.depositsTotal)} helper="Sesuai filter" />
-          <SummaryCard label="Tambahan" value={rupiah(recapSummary.additions)} helper="Sesuai filter" />
-          <SummaryCard label="Penarikan" value={rupiah(recapSummary.withdrawals)} helper={`${recapSummary.count} bulan`} />
+          <SummaryCard label="Tambahan rezeki" value={rupiah(recapSummary.additions)} helper="Sesuai filter" />
+          <SummaryCard label="Kepakai" value={rupiah(recapSummary.withdrawals)} helper={`${recapSummary.count} bulan`} />
         </div>
 
         <div className="mb-5 flex flex-col gap-3 sm:max-w-md sm:flex-row">
@@ -110,7 +110,7 @@ export default function RecapPage() {
         </div>
 
         {filteredRecaps.length === 0 ? (
-          <EmptyState title="Belum ada rekap" description="Generate setoran atau tambah mutasi dulu supaya rekap muncul." />
+          <EmptyState title="Belum ada jejak tabungan" description="Generate setoran atau tambah mutasi dulu supaya rekap muncul." />
         ) : (
           <>
             <div className="grid gap-3 md:hidden">
@@ -142,7 +142,7 @@ export default function RecapPage() {
                     </div>
                   </div>
                   <div className="mt-3 rounded-2xl palette-card p-3 text-sm font-bold text-slate-700">
-                    Total setoran masuk: {rupiah(recap.totalRequiredDeposits)}
+                    Setoran terkumpul masuk: {rupiah(recap.totalRequiredDeposits)}
                   </div>
                 </div>
               ))}
@@ -155,10 +155,10 @@ export default function RecapPage() {
                     <th className="table-th">Bulan</th>
                     <th className="table-th">Setoran Mpip</th>
                     <th className="table-th">Setoran Kakak</th>
-                    <th className="table-th">Total Setoran Wajib Masuk</th>
-                    <th className="table-th">Tambahan</th>
-                    <th className="table-th">Penarikan</th>
-                    <th className="table-th">Saldo Akhir Bulan</th>
+                    <th className="table-th">Setoran wajib masuk</th>
+                    <th className="table-th">Tambahan rezeki</th>
+                    <th className="table-th">Kepakai</th>
+                    <th className="table-th">Saldo akhir</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white">

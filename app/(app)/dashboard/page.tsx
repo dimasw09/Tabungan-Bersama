@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase/client';
 import type { Member, MonthlyDeposit, OtherMutation } from '@/lib/types';
 import { calculateCurrentMonthStats, calculateMemberMonthStats, calculateTotals } from '@/lib/calculations';
 import { formatDate, monthLabel, rupiah } from '@/lib/format';
-import { normalizeDepositStatuses, statusBadgeClass } from '@/lib/depositStatus';
+import { normalizeDepositStatus perjuanganes, statusBadgeClass } from '@/lib/depositStatus perjuangan';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -19,9 +19,9 @@ function StatCard({ icon, label, value, helper }: { icon: string; label: string;
     <Card className="relative overflow-hidden ">
       <div className="absolute -right-5 -top-5 h-20 w-20 rounded-full bg-blue-50" />
       <div className="relative">
-        <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-xl shadow-sm">{icon}</div>
+        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-lg shadow-sm md:mb-4 md:h-11 md:w-11 md:text-xl">{icon}</div>
         <p className="text-sm font-semibold text-slate-500">{label}</p>
-        <p className="mt-2 text-2xl font-bold text-slate-900">{value}</p>
+        <p className="mt-2 text-xl font-bold text-slate-900 md:text-2xl">{value}</p>
         {helper ? <p className="mt-2 text-xs font-medium text-slate-400">{helper}</p> : null}
       </div>
     </Card>
@@ -51,7 +51,7 @@ export default function DashboardPage() {
     }
 
     setMembers((membersResult.data || []) as Member[]);
-    setDeposits(normalizeDepositStatuses((depositsResult.data || []) as MonthlyDeposit[]));
+    setDeposits(normalizeDepositStatus perjuanganes((depositsResult.data || []) as MonthlyDeposit[]));
     setMutations((mutationsResult.data || []) as OtherMutation[]);
   }
 
@@ -82,8 +82,8 @@ export default function DashboardPage() {
   return (
     <main>
       <PageHeader
-        title="Dashboard"
-        description="Ringkasan saldo dan progress tabungan bulan ini."
+        title="Rumah Tabungan Kita"
+        description="Tempat kecil buat lihat usaha Kakak dan Mpip ngumpulin masa depan bareng."
       />
 
       {members.length === 0 ? (
@@ -104,17 +104,17 @@ export default function DashboardPage() {
                 </p>
                 <div className="mt-6 grid grid-cols-2 gap-3">
                   <Link href="/deposits">
-                    <Button className="w-full">Setoran</Button>
+                    <Button className="w-full">Nabung</Button>
                   </Link>
                   <Link href="/mutations">
-                    <Button variant="secondary" className="w-full">Mutasi</Button>
+                    <Button variant="secondary" className="w-full">Cerita uang</Button>
                   </Link>
                 </div>
               </div>
             </Card>
 
             <Card>
-              <p className="text-sm font-semibold text-slate-500">Status {monthLabel(currentMonth.year, currentMonth.month)}</p>
+              <p className="text-sm font-semibold text-slate-500">Status perjuangan {monthLabel(currentMonth.year, currentMonth.month)}</p>
               <div className="mt-4 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-2xl font-bold text-slate-900">{currentMonth.progress}%</p>
@@ -122,9 +122,9 @@ export default function DashboardPage() {
                 </div>
                 <span
                   className={`badge ${
-                    currentMonth.status === 'Lengkap'
+                    currentMonth.status === 'Kompak'
                       ? 'bg-white text-[#3557bf] ring-1 ring-white/50'
-                      : currentMonth.status === 'Lebih'
+                      : currentMonth.status === 'Lebih manis'
                         ? 'bg-white/80 text-[#3557bf] ring-1 ring-white/50'
                         : 'bg-amber-100 text-amber-700 ring-1 ring-amber-200'
                   }`}
@@ -148,18 +148,18 @@ export default function DashboardPage() {
           </section>
 
           <section className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-            <StatCard icon="💰" label="Saldo saat ini" value={rupiah(totals.balance)} helper="Setoran + tambahan - penarikan" />
-            <StatCard icon="📥" label="Total setoran masuk" value={rupiah(totals.totalDeposits)} />
-            <StatCard icon="✨" label="Total tambahan" value={rupiah(totals.totalAdditions)} />
-            <StatCard icon="📤" label="Total penarikan" value={rupiah(totals.totalWithdrawals)} />
+            <StatCard icon="💰" label="Saldo cinta kita" value={rupiah(totals.balance)} helper="Nabung + tambahan - penarikan" />
+            <StatCard icon="📥" label="Nabung wajib terkumpul" value={rupiah(totals.totalDeposits)} />
+            <StatCard icon="✨" label="Tambahan rezeki" value={rupiah(totals.totalAdditions)} />
+            <StatCard icon="📤" label="Terpakai buat kita" value={rupiah(totals.totalWithdrawals)} />
           </section>
 
           <section className="mt-5 grid gap-5 lg:grid-cols-[1fr_420px]">
             <Card>
               <div className="mb-5 flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-black text-stone-900">Progress per anggota</h2>
-                  <p className="mt-1 text-sm font-semibold text-stone-500">Target bulan ini per Kakak dan Mpip.</p>
+                  <h2 className="text-lg font-black text-stone-900">Progress Kakak & Mpip</h2>
+                  <p className="mt-1 text-sm font-semibold text-stone-500">Biar kelihatan siapa yang udah setor bulan ini.</p>
                 </div>
                 <span className="hidden rounded-full bg-white/80 px-3 py-1 text-xs font-black text-stone-500 sm:inline-flex">
                   {monthLabel(currentMonth.year, currentMonth.month)}
@@ -196,11 +196,11 @@ export default function DashboardPage() {
             </Card>
 
             <Card>
-              <h2 className="text-lg font-black text-stone-900">Mutasi terbaru</h2>
-              <p className="mt-1 text-sm font-semibold text-stone-500">Catatan transaksi terakhir di luar setoran wajib.</p>
+              <h2 className="text-lg font-black text-stone-900">Cerita uang terbaru</h2>
+              <p className="mt-1 text-sm font-semibold text-stone-500">Catatan kecil selain setoran wajib kita.</p>
 
               {recentMutations.length === 0 ? (
-                <div className="mt-5 rounded-3xl bg-white/60 p-4 text-sm font-semibold text-stone-500">Belum ada mutasi lain.</div>
+                <div className="mt-5 rounded-3xl bg-white/60 p-4 text-sm font-semibold text-stone-500">Belum ada cerita tambahan, tabungan masih aman manis.</div>
               ) : (
                 <div className="mt-5 space-y-3">
                   {recentMutations.map((mutation) => (

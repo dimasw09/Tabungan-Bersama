@@ -2,9 +2,8 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
-import type { MutationType, MonthlyDeposit, OtherMutation } from '@/lib/types';
+import type { MonthlyDeposit, OtherMutation as ImportedOtherMutation } from '@/lib/types';
 import { currentYearMonth, formatDate, monthLabel, rupiah, todayInput } from '@/lib/format';
-import { calculateMonthlyRecaps } from '@/lib/calculations';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -13,9 +12,13 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { useToast } from '@/components/ui/ToastProvider';
 
+type MutationType = 'Tambah rezeki' | 'Kepakai';
+
+type OtherMutation = Omit<ImportedOtherMutation, 'type'> & { type: MutationType };
+
 const emptyForm = {
   mutation_date: todayInput(),
-  type: 'Tambah' as MutationType,
+  type: 'Tambah rezeki' as MutationType,
   amount: 0,
   description: ''
 };
@@ -49,6 +52,40 @@ function isValidDateText(value: string) {
     date.getMonth() === month - 1 &&
     date.getDate() === day
   );
+}
+
+function calculateMonthlyRecaps(deposits: MonthlyDeposit[], mutations: OtherMutation[]) {
+  const buckets = new Map<string, { year: number; month: number; totalDeposits: number; additions: number; withdrawals: number }>();
+
+  function ensureBucket(year: number, month: number) {
+    const key = `${year}-${String(month).padStart(2, '0')}`;
+    if (!buckets.has(key)) {
+      buckets.set(key, { year, month, totalDeposits: 0, additions: 0, withdrawals: 0 });
+    }
+    return buckets.get(key)!;
+  }
+
+  deposits.forEach((deposit) => {
+    const bucket = ensureBucket(deposit.year, deposit.month);
+    bucket.totalDeposits += Number(deposit.paid_amount || 0);
+  });
+
+  mutations.forEach((mutation) => {
+    const date = new Date(`${mutation.mutation_date}T00:00:00`);
+    const bucket = ensureBucket(date.getFullYear(), date.getMonth() + 1);
+    const amount = Number(mutation.amount || 0);
+
+    if (mutation.type === 'Tambah rezeki') bucket.additions += amount;
+    if (mutation.type === 'Kepakai') bucket.withdrawals += amount;
+  });
+
+  const sortedBuckets = Array.from(buckets.values()).sort((a, b) => a.year - b.year || a.month - b.month);
+  let runningBalance = 0;
+
+  return sortedBuckets.map((bucket) => {
+    runningBalance += bucket.totalDeposits + bucket.additions - bucket.withdrawals;
+    return { year: bucket.year, month: bucket.month, endingBalance: runningBalance };
+  });
 }
 
 export default function MutationsPage() {
@@ -118,8 +155,8 @@ export default function MutationsPage() {
   }, [mutations, filterYear, filterMonth, filterType, search]);
 
   const summary = useMemo(() => {
-    const additions = filteredMutations.filter((item) => item.type === 'Tambah').reduce((sum, item) => sum + Number(item.amount || 0), 0);
-    const withdrawals = filteredMutations.filter((item) => item.type === 'Penarikan').reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const additions = filteredMutations.filter((item) => item.type === 'Tambah rezeki').reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const withdrawals = filteredMutations.filter((item) => item.type === 'Kepakai').reduce((sum, item) => sum + Number(item.amount || 0), 0);
     return {
       additions,
       withdrawals,
@@ -130,8 +167,8 @@ export default function MutationsPage() {
 
   const currentBalance = useMemo(() => {
     const depositsTotal = deposits.reduce((sum, deposit) => sum + Number(deposit.paid_amount || 0), 0);
-    const additions = mutations.filter((item) => item.type === 'Tambah').reduce((sum, item) => sum + Number(item.amount || 0), 0);
-    const withdrawals = mutations.filter((item) => item.type === 'Penarikan').reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const additions = mutations.filter((item) => item.type === 'Tambah rezeki').reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const withdrawals = mutations.filter((item) => item.type === 'Kepakai').reduce((sum, item) => sum + Number(item.amount || 0), 0);
     return depositsTotal + additions - withdrawals;
   }, [deposits, mutations]);
 
@@ -183,52 +220,52 @@ export default function MutationsPage() {
     const description = form.description.trim();
 
     if (!form.mutation_date || !isValidDateText(form.mutation_date)) {
-      toast({ title: 'Tanggal mutasi belum valid', message: 'Tanggal wajib diisi dengan format tanggal valid.', type: 'error' });
+      toast({ title: 'Tanggal ceritanya belum valid', message: 'Tanggal wajib diisi dengan benar ya.', type: 'error' });
       return;
     }
 
     if (form.mutation_date > todayInput()) {
-      toast({ title: 'Tanggal mutasi belum valid', message: 'Tanggal mutasi tidak boleh lebih dari hari ini.', type: 'error' });
+      toast({ title: 'Tanggal ceritanya belum valid', message: 'Tanggal cerita nggak boleh lebih dari hari ini.', type: 'error' });
       return;
     }
 
-    if (!['Tambah', 'Penarikan'].includes(form.type)) {
-      toast({ title: 'Tipe mutasi belum valid', message: 'Tipe harus Tambah atau Penarikan.', type: 'error' });
+    if (!['Tambah rezeki', 'Kepakai'].includes(form.type)) {
+      toast({ title: 'Tipe cerita belum valid', message: 'Tipe harus Tambah rezeki atau Kepakai.', type: 'error' });
       return;
     }
 
     if (!Number.isFinite(amount) || amount <= 0) {
-      toast({ title: 'Nominal mutasi belum valid', message: 'Nominal wajib lebih dari 0.', type: 'error' });
+      toast({ title: 'Nominalnya mutasi belum valid', message: 'Nominalnya wajib lebih dari 0.', type: 'error' });
       return;
     }
 
     if (amount > 1_000_000_000) {
-      toast({ title: 'Nominal terlalu besar', message: 'Cek lagi nominalnya, maksimal 1 miliar per mutasi.', type: 'error' });
+      toast({ title: 'Nominalnya terlalu besar', message: 'Cek lagi nominalnya ya, maksimal 1 miliar per cerita.', type: 'error' });
       return;
     }
 
     if (description.length > 160) {
-      toast({ title: 'Keterangan terlalu panjang', message: 'Maksimal 160 karakter biar rekap tetap rapi.', type: 'error' });
+      toast({ title: 'Keterangan manis terlalu panjang', message: 'Maksimal 160 karakter biar tetap rapi.', type: 'error' });
       return;
     }
 
-    if (form.type === 'Penarikan' && description.length === 0) {
-      toast({ title: 'Keterangan wajib diisi', message: 'Penarikan wajib punya keterangan supaya jelas uangnya dipakai untuk apa.', type: 'error' });
+    if (form.type === 'Kepakai' && description.length === 0) {
+      toast({ title: 'Keterangan manis wajib diisi', message: 'Kepakai wajib punya keterangan supaya jelas uangnya dipakai untuk apa.', type: 'error' });
       return;
     }
 
     const balanceWithoutCurrentMutation = (() => {
       const depositsTotal = deposits.reduce((sum, deposit) => sum + Number(deposit.paid_amount || 0), 0);
       const otherRows = mutations.filter((mutation) => mutation.id !== editing?.id);
-      const additions = otherRows.filter((item) => item.type === 'Tambah').reduce((sum, item) => sum + Number(item.amount || 0), 0);
-      const withdrawals = otherRows.filter((item) => item.type === 'Penarikan').reduce((sum, item) => sum + Number(item.amount || 0), 0);
+      const additions = otherRows.filter((item) => item.type === 'Tambah rezeki').reduce((sum, item) => sum + Number(item.amount || 0), 0);
+      const withdrawals = otherRows.filter((item) => item.type === 'Kepakai').reduce((sum, item) => sum + Number(item.amount || 0), 0);
       return depositsTotal + additions - withdrawals;
     })();
 
-    if (form.type === 'Penarikan' && amount > balanceWithoutCurrentMutation) {
+    if (form.type === 'Kepakai' && amount > balanceWithoutCurrentMutation) {
       toast({
-        title: 'Saldo tidak cukup',
-        message: `Saldo tersedia ${rupiah(balanceWithoutCurrentMutation)}, penarikan tidak boleh lebih besar dari saldo.`,
+        title: 'Saldo belum cukup',
+        message: `Saldo tersedia ${rupiah(balanceWithoutCurrentMutation)}, uang yang kepakai nggak boleh lebih besar dari saldo.`,
         type: 'error'
       });
       return;
@@ -249,8 +286,8 @@ export default function MutationsPage() {
 
     if (negativeRecap) {
       toast({
-        title: 'Rekap jadi minus',
-        message: `Saldo akhir ${monthLabel(negativeRecap.year, negativeRecap.month)} akan menjadi ${rupiah(negativeRecap.endingBalance)}. Ubah nominal/tanggal mutasi dulu.`,
+        title: 'Saldo bulan jadi minus',
+        message: `Saldo akhir ${monthLabel(negativeRecap.year, negativeRecap.month)} akan menjadi ${rupiah(negativeRecap.endingBalance)}. Coba ubah nominal atau tanggalnya dulu ya.`,
         type: 'error'
       });
       return;
@@ -271,26 +308,26 @@ export default function MutationsPage() {
     setSaving(false);
 
     if (result.error) {
-      toast({ title: editing ? 'Gagal update mutasi' : 'Gagal tambah mutasi', message: result.error.message, type: 'error' });
+      toast({ title: editing ? 'Gagal update cerita' : 'Gagal tambah cerita', message: result.error.message, type: 'error' });
       return;
     }
 
-    toast({ title: editing ? 'Mutasi berhasil diupdate' : 'Mutasi berhasil ditambah', type: 'success' });
+    toast({ title: editing ? 'Cerita berhasil diupdate' : 'Cerita berhasil ditambah', type: 'success' });
     resetForm();
     fetchMutations(false);
   }
 
   function deleteMutation(mutation: OtherMutation) {
     setConfirmAction({
-      title: 'Hapus mutasi?',
+      title: 'Hapus cerita ini?',
       description: `Mutasi ${mutation.type} ${rupiah(mutation.amount)} tanggal ${formatDate(mutation.mutation_date)} akan dihapus permanen dan saldo rekap ikut berubah.`,
-      confirmLabel: 'Ya, hapus mutasi',
+      confirmLabel: 'Iya, hapus cerita',
       tone: 'danger',
       onConfirm: async () => {
         const { error } = await supabase.from('other_mutations').delete().eq('id', mutation.id);
         if (error) throw error;
 
-        toast({ title: 'Mutasi berhasil dihapus', type: 'success' });
+        toast({ title: 'Cerita berhasil dihapus', type: 'success' });
         fetchMutations(false);
       }
     });
@@ -301,18 +338,18 @@ export default function MutationsPage() {
   return (
     <main>
       <PageHeader
-        title="Mutasi Lain"
-        description="Catat transaksi di luar setoran wajib. Tipe Tambah menaikkan saldo, Penarikan mengurangi saldo. Filter dan search langsung ngaruh ke ringkasan."
+        title="Cerita Uang Kita"
+        description="Catat tambahan rezeki atau uang yang kepakai, biar saldo kita tetap jujur dan jelas."
       />
 
       <div className="grid gap-5 lg:grid-cols-[420px_1fr]">
         <Card className={`${showSimpleForm || editing ? 'block' : 'hidden'}`}>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">{editing ? 'Edit Mutasi' : 'Tambah Mutasi'}</h2>
-              <p className="mt-1 text-sm font-semibold text-slate-500">Isi transaksi tambahan atau penarikan.</p>
+              <h2 className="text-lg font-bold text-slate-900">{editing ? 'Edit cerita' : 'Tambah rezeki cerita'}</h2>
+              <p className="mt-1 text-sm font-semibold text-slate-500">Isi cerita uang yang masuk atau kepakai.</p>
             </div>
-            <span className={`badge ${form.type === 'Tambah' ? 'bg-emerald-100 text-stone-800' : 'bg-rose-100 text-stone-800'}`}>{form.type}</span>
+            <span className={`badge ${form.type === 'Tambah rezeki' ? 'bg-emerald-100 text-stone-800' : 'bg-rose-100 text-stone-800'}`}>{form.type}</span>
           </div>
 
           <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
@@ -325,36 +362,36 @@ export default function MutationsPage() {
               <div className="mt-2 grid grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => setForm({ ...form, type: 'Tambah' })}
-                  className={`rounded-2xl px-4 py-3 text-sm font-bold transition ${form.type === 'Tambah' ? 'bg-emerald-100 text-stone-800 ring-2 ring-emerald-200' : 'bg-white/90 text-slate-500'}`}
+                  onClick={() => setForm({ ...form, type: 'Tambah rezeki' })}
+                  className={`rounded-2xl px-4 py-3 text-sm font-bold transition ${form.type === 'Tambah rezeki' ? 'bg-emerald-100 text-stone-800 ring-2 ring-emerald-200' : 'bg-white/90 text-slate-500'}`}
                 >
-                  Tambah
+                  Tambah rezeki
                 </button>
                 <button
                   type="button"
-                  onClick={() => setForm({ ...form, type: 'Penarikan' })}
-                  className={`rounded-2xl px-4 py-3 text-sm font-bold transition ${form.type === 'Penarikan' ? 'bg-rose-100 text-stone-800 ring-2 ring-rose-200' : 'bg-white/90 text-slate-500'}`}
+                  onClick={() => setForm({ ...form, type: 'Kepakai' })}
+                  className={`rounded-2xl px-4 py-3 text-sm font-bold transition ${form.type === 'Kepakai' ? 'bg-rose-100 text-stone-800 ring-2 ring-rose-200' : 'bg-white/90 text-slate-500'}`}
                 >
-                  Penarikan
+                  Kepakai
                 </button>
               </div>
             </div>
             <div>
-              <label className="form-label">Nominal</label>
+              <label className="form-label">Nominalnya</label>
               <input className="form-input mt-2" type="number" value={form.amount} onChange={(event) => setForm({ ...form, amount: Number(event.target.value) })} min={1} />
               <p className="mt-1 text-xs font-bold text-slate-400">Preview: {rupiah(form.amount)}</p>
             </div>
             <div>
-              <label className="form-label">Keterangan</label>
-              <textarea className="form-input mt-2 min-h-28" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Contoh: bonus, hadiah, ambil buat kebutuhan... Penarikan wajib ada keterangan." />
+              <label className="form-label">Keterangan manis</label>
+              <textarea className="form-input mt-2 min-h-28" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Contoh: bonus, hadiah, ambil buat kebutuhan... Kepakai wajib ada keterangan." />
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button type="submit" disabled={saving} className="w-full sm:w-auto">
-                {saving ? 'Menyimpan...' : editing ? 'Update mutasi' : 'Simpan mutasi'}
+                {saving ? 'Lagi disimpan...' : editing ? 'Update cerita' : 'Simpan cerita'}
               </Button>
               {editing ? (
                 <Button type="button" variant="secondary" onClick={resetForm} className="w-full sm:w-auto">
-                  Batal
+                  Nanti dulu
                 </Button>
               ) : null}
             </div>
@@ -363,11 +400,11 @@ export default function MutationsPage() {
 
         <Card>
           <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <SummaryCard label="Tambah" value={rupiah(summary.additions)} tone="green" />
-            <SummaryCard label="Penarikan" value={rupiah(summary.withdrawals)} tone="red" />
+            <SummaryCard label="Tambah rezeki" value={rupiah(summary.additions)} tone="green" />
+            <SummaryCard label="Kepakai" value={rupiah(summary.withdrawals)} tone="red" />
             <SummaryCard label="Net" value={rupiah(summary.net)} tone={summary.net < 0 ? 'red' : 'green'} />
-            <SummaryCard label="Saldo sekarang" value={rupiah(currentBalance)} tone={currentBalance < 0 ? 'red' : 'green'} />
-            <SummaryCard label="Jumlah data" value={`${summary.count}`} />
+            <SummaryCard label="Saldo cinta" value={rupiah(currentBalance)} tone={currentBalance < 0 ? 'red' : 'green'} />
+            <SummaryCard label="Jumlah cerita" value={`${summary.count}`} />
           </div>
 
           <div className={`${showSimpleFilter ? 'grid' : 'hidden'} mb-5 gap-3 md:grid-cols-5`}>
@@ -389,17 +426,17 @@ export default function MutationsPage() {
             </select>
             <select className="form-input" value={filterType} onChange={(event) => setFilterType(event.target.value)}>
               <option value="all">Semua tipe</option>
-              <option value="Tambah">Tambah</option>
-              <option value="Penarikan">Penarikan</option>
+              <option value="Tambah rezeki">Tambah rezeki</option>
+              <option value="Kepakai">Kepakai</option>
             </select>
-            <input className="form-input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search keterangan..." />
+            <input className="form-input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari cerita..." />
             <Button type="button" variant="secondary" onClick={resetFilters}>
               Reset filter
             </Button>
           </div>
 
           {filteredMutations.length === 0 ? (
-            <EmptyState title="Belum ada mutasi" description="Tambahkan transaksi tambahan atau penarikan dulu." />
+            <EmptyState title="Belum ada cerita uang" description="Tambah rezekikan transaksi tambahan atau penarikan dulu." />
           ) : (
             <>
               <div className="grid gap-3 md:hidden">
@@ -407,7 +444,7 @@ export default function MutationsPage() {
                   <div key={mutation.id} className="mobile-data-card">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <span className={`badge ${mutation.type === 'Tambah' ? 'bg-emerald-100 text-stone-800' : 'bg-rose-100 text-stone-800'}`}>{mutation.type}</span>
+                        <span className={`badge ${mutation.type === 'Tambah rezeki' ? 'bg-emerald-100 text-stone-800' : 'bg-rose-100 text-stone-800'}`}>{mutation.type}</span>
                         <p className="mt-3 text-2xl font-bold text-slate-900">{rupiah(mutation.amount)}</p>
                       </div>
                       <p className="text-xs font-bold text-slate-400">{formatDate(mutation.mutation_date)}</p>
@@ -436,8 +473,8 @@ export default function MutationsPage() {
                     <tr>
                       <th className="table-th">Tanggal</th>
                       <th className="table-th">Tipe</th>
-                      <th className="table-th">Nominal</th>
-                      <th className="table-th">Keterangan</th>
+                      <th className="table-th">Nominalnya</th>
+                      <th className="table-th">Keterangan manis</th>
                       <th className="table-th">Action</th>
                     </tr>
                   </thead>
@@ -446,7 +483,7 @@ export default function MutationsPage() {
                       <tr key={mutation.id}>
                         <td className="table-td font-bold">{formatDate(mutation.mutation_date)}</td>
                         <td className="table-td">
-                          <span className={`badge ${mutation.type === 'Tambah' ? 'bg-emerald-100 text-stone-800' : 'bg-rose-100 text-stone-800'}`}>
+                          <span className={`badge ${mutation.type === 'Tambah rezeki' ? 'bg-emerald-100 text-stone-800' : 'bg-rose-100 text-stone-800'}`}>
                             {mutation.type}
                           </span>
                         </td>

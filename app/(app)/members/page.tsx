@@ -36,11 +36,11 @@ function MemberBigCard({ member, onEdit }: { member: Member; onEdit: (member: Me
       <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full opacity-70" style={{ backgroundColor: member.color || (member.name === 'Mpip' ? '#E3A2C8' : '#A4BBE0') }} />
       <div className="relative">
         <span className="badge text-slate-700" style={{ backgroundColor: member.color || (member.name === 'Mpip' ? '#E3A2C8' : '#A4BBE0') }}>{member.name}</span>
-        <p className="mt-5 text-xs font-bold uppercase tracking-wide text-slate-400">Setoran wajib</p>
+        <p className="mt-5 text-xs font-bold uppercase tracking-wide text-slate-400">Setoran sayang</p>
         <p className="mt-1 text-3xl font-bold text-slate-900">{rupiah(member.monthly_amount)}</p>
         <p className="mt-2 text-sm font-bold text-slate-500">Setor tiap tanggal {member.payday}</p>
         <Button type="button" variant="secondary" className="mt-5" onClick={() => onEdit(member)}>
-          Edit setting
+          Atur
         </Button>
       </div>
     </div>
@@ -152,7 +152,7 @@ export default function MembersPage() {
     const payday = Number(form.payday);
 
     if (!Number.isFinite(monthlyAmount) || monthlyAmount <= 0) {
-      toast({ title: 'Data anggota belum valid', message: 'Nominal setoran wajib harus lebih dari 0.', type: 'error' });
+      toast({ title: 'Data anggota belum valid', message: 'Nominal setoran harus lebih dari 0.', type: 'error' });
       return;
     }
 
@@ -167,7 +167,7 @@ export default function MembersPage() {
     }
 
     if (!/^#[0-9A-F]{6}$/i.test(form.color)) {
-      toast({ title: 'Warna label belum valid', message: 'Gunakan format warna HEX, contoh #E3A2C8.', type: 'error' });
+      toast({ title: 'Warna label kesayangan belum valid', message: 'Gunakan format warna HEX, contoh #E3A2C8.', type: 'error' });
       return;
     }
 
@@ -190,7 +190,7 @@ export default function MembersPage() {
       }
 
       toast({
-        title: 'Data anggota berhasil diupdate',
+        title: 'Setting berhasil disimpan',
         message: syncUnpaid ? `${syncedRows} setoran belum dibayar ikut disesuaikan.` : 'Setoran yang sudah digenerate tidak diubah.',
         type: 'success'
       });
@@ -198,7 +198,7 @@ export default function MembersPage() {
       fetchMembers(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Terjadi error tidak diketahui.';
-      toast({ title: 'Gagal update anggota', message, type: 'error' });
+      toast({ title: 'Gagal simpan setting', message, type: 'error' });
     } finally {
       setSaving(false);
     }
@@ -209,8 +209,8 @@ export default function MembersPage() {
   return (
     <main>
       <PageHeader
-        title="Data Anggota"
-        description="Setting nominal, tanggal setor, dan warna label Kakak & Mpip."
+        title="Setting Kakak & Mpip"
+        description="Atur nominal, tanggal setor, dan warna label biar tabungan cinta kita makin rapi."
       />
 
       {members.length < 2 ? (
@@ -224,9 +224,9 @@ export default function MembersPage() {
 
       <div className="mb-5 grid gap-4 md:grid-cols-3">
         <Card>
-          <p className="text-sm font-bold text-slate-500">Target bulanan</p>
+          <p className="text-sm font-bold text-slate-500">Target cinta bulanan</p>
           <p className="mt-2 text-3xl font-bold text-slate-900">{rupiah(monthlyTarget)}</p>
-          <p className="mt-1 text-xs font-bold text-slate-400">Total setoran wajib Kakak + Mpip</p>
+          <p className="mt-1 text-xs font-bold text-slate-400">Total setoran wajib kita berdua</p>
         </Card>
         {members.map((member) => (
           <MemberBigCard key={member.id} member={member} onEdit={startEdit} />
@@ -235,19 +235,19 @@ export default function MembersPage() {
 
       <div className="grid gap-5 lg:grid-cols-[420px_1fr]">
         <Card>
-          <h2 className="text-lg font-bold text-slate-900">{editingMember ? `Edit ${editingMember.name}` : 'Pilih anggota'}</h2>
+          <h2 className="text-lg font-bold text-slate-900">{editingMember ? `Edit ${editingMember.name}` : 'Pilih Kakak/Mpip'}</h2>
           <p className="mt-2 text-sm font-semibold text-slate-500">
-            Kalau nominal/tanggal setor diubah, setoran yang belum dibayar bisa otomatis ikut disesuaikan supaya data ke depan tetap rapi.
+            Kalau nominal atau tanggal setor berubah, setoran yang belum dibayar bisa ikut disesuaikan biar ke depannya tetap rapi.
           </p>
 
           {editingMember ? (
             <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
               <div>
-                <label className="form-label">Nama</label>
+                <label className="form-label">Nama sayang</label>
                 <input className="form-input mt-2 bg-stone-100 text-slate-500" value={editingMember.name} disabled />
               </div>
               <div>
-                <label className="form-label">Nominal setoran wajib</label>
+                <label className="form-label">Nominal setoran</label>
                 <input
                   className="form-input mt-2"
                   type="number"
@@ -258,7 +258,7 @@ export default function MembersPage() {
                 <p className="mt-1 text-xs font-bold text-slate-500">Preview: {rupiah(form.monthly_amount)}</p>
               </div>
               <div>
-                <label className="form-label">Tanggal setor bulanan</label>
+                <label className="form-label">Tanggal setor</label>
                 <input
                   className="form-input mt-2"
                   type="number"
@@ -269,7 +269,7 @@ export default function MembersPage() {
                 />
               </div>
               <div>
-                <label className="form-label">Warna label</label>
+                <label className="form-label">Warna label kesayangan</label>
                 <div className="mt-2 flex gap-3">
                   <input
                     className="h-12 w-16 cursor-pointer rounded-2xl border border-white bg-white p-1 shadow-sm"
@@ -299,27 +299,27 @@ export default function MembersPage() {
                   onChange={(event) => setSyncUnpaid(event.target.checked)}
                   className="mt-1 h-4 w-4 rounded border-stone-300"
                 />
-                <span>Ikut update nominal & jatuh tempo setoran yang belum dibayar</span>
+                <span>Ikut update setoran yang belum dibayar</span>
               </label>
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Button type="submit" disabled={saving} className="w-full sm:w-auto">
-                  {saving ? 'Menyimpan...' : 'Update'}
+                  {saving ? 'Menyimpan...' : 'Simpan'}
                 </Button>
                 <Button type="button" variant="secondary" onClick={cancelEdit} className="w-full sm:w-auto">
-                  Batal
+                  Nanti dulu
                 </Button>
               </div>
             </form>
           ) : (
             <div className="mt-5 rounded-3xl palette-card p-4 text-sm font-semibold text-stone-600">
-              Klik tombol <b>Edit setting</b> di card anggota atau tabel sebelah kanan.
+              Klik tombol <b>Atur</b> di card anggota atau tabel sebelah kanan.
             </div>
           )}
         </Card>
 
         <Card>
           {members.length === 0 ? (
-            <EmptyState title="Belum ada anggota" description="Jalankan SQL seed supaya Kakak dan Mpip dibuat otomatis." />
+            <EmptyState title="Data Kakak/Mpip belum ada" description="Jalankan SQL seed dulu supaya data Kakak dan Mpip muncul." />
           ) : (
             <>
               <div className="grid gap-3 md:hidden">
@@ -343,7 +343,7 @@ export default function MembersPage() {
                 <table className="w-full min-w-[720px] overflow-hidden rounded-3xl bg-white/75">
                   <thead className="bg-white/90">
                     <tr>
-                      <th className="table-th">Nama</th>
+                      <th className="table-th">Nama sayang</th>
                       <th className="table-th">Nominal wajib</th>
                       <th className="table-th">Tanggal setor</th>
                       <th className="table-th">Warna</th>

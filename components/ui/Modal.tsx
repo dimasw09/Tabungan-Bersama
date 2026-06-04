@@ -17,7 +17,7 @@ export function Modal({ open, title, children, onClose }: ModalProps) {
         <div className="mb-4 flex items-center justify-between gap-4">
           <h2 className="text-lg font-bold text-slate-900">{title}</h2>
           <Button type="button" variant="ghost" onClick={onClose}>
-            Tutup
+            Tutup dulu
           </Button>
         </div>
         {children}

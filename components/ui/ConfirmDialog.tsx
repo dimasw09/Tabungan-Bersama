@@ -20,8 +20,8 @@ export function ConfirmDialog({
   open,
   title,
   description,
-  confirmLabel = 'Ya, lanjutkan',
-  cancelLabel = 'Batal',
+  confirmLabel = 'Iya, lanjut',
+  cancelLabel = 'Nanti dulu',
   loading = false,
   tone = 'primary',
   children,
@@ -42,7 +42,7 @@ export function ConfirmDialog({
             {cancelLabel}
           </Button>
           <Button type="button" variant={tone === 'danger' ? 'danger' : 'primary'} onClick={onConfirm} disabled={loading} className="w-full">
-            {loading ? 'Memproses...' : confirmLabel}
+            {loading ? 'Lagi diproses...' : confirmLabel}
           </Button>
         </div>
       </div>
