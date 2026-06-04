@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase/client';
 import type { Member, MonthlyDeposit, OtherMutation } from '@/lib/types';
 import { calculateCurrentMonthStats, calculateMemberMonthStats, calculateTotals } from '@/lib/calculations';
 import { formatDate, monthLabel, rupiah } from '@/lib/format';
-import { normalizeDepositStatus perjuanganes, statusBadgeClass } from '@/lib/depositStatus perjuangan';
+import { normalizeDepositStatus, statusBadgeClass } from '@/lib/depositStatus';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -51,7 +51,7 @@ export default function DashboardPage() {
     }
 
     setMembers((membersResult.data || []) as Member[]);
-    setDeposits(normalizeDepositStatus perjuanganes((depositsResult.data || []) as MonthlyDeposit[]));
+    setDeposits(((depositsResult.data || []) as MonthlyDeposit[]).map((deposit) => normalizeDepositStatus(deposit)));
     setMutations((mutationsResult.data || []) as OtherMutation[]);
   }
 
