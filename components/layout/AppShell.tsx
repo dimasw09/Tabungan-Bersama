@@ -29,7 +29,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Link>
           </div>
 
-          <nav className="mt-4 grid grid-cols-4 gap-2">
+          <nav className="mt-4 hidden grid-cols-4 gap-2 md:grid">
             {links.map((link) => {
               const active = pathname === link.href;
               return (
