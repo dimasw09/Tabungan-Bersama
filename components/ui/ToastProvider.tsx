@@ -37,15 +37,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {toasts.map((item) => (
           <div
             key={item.id}
-            className={`rounded-3xl border bg-white/95 p-4 text-sm shadow-soft backdrop-blur ${
+            className={`rounded-3xl border bg-white p-4 text-sm shadow-lg ${
               item.type === 'success'
                 ? 'border-skysoft-200'
                 : item.type === 'error'
                   ? 'border-blush-200'
-                  : 'border-creamsoft-200'
+                  : 'border-stone-200'
             }`}
           >
-            <p className="font-black text-stone-800">{item.title}</p>
+            <p className="font-bold text-stone-800">{item.title}</p>
             {item.message ? <p className="mt-1 text-stone-500">{item.message}</p> : null}
           </div>
         ))}

@@ -15,10 +15,10 @@ import { useToast } from '@/components/ui/ToastProvider';
 
 function SummaryCard({ label, value, helper }: { label: string; value: string; helper?: string }) {
   return (
-    <div className="rounded-[1.5rem] bg-white/70 p-4 shadow-sm">
-      <p className="text-xs font-black uppercase tracking-wide text-stone-400">{label}</p>
-      <p className="mt-1 text-xl font-black text-stone-900">{value}</p>
-      {helper ? <p className="mt-1 text-xs font-bold text-stone-400">{helper}</p> : null}
+    <div className="rounded-[1.5rem] bg-white p-4 shadow-sm">
+      <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="mt-1 text-xl font-bold text-slate-900">{value}</p>
+      {helper ? <p className="mt-1 text-xs font-bold text-slate-400">{helper}</p> : null}
     </div>
   );
 }
@@ -118,30 +118,30 @@ export default function RecapPage() {
                 <div key={recap.key} className="mobile-data-card">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-lg font-black text-stone-900">{monthLabel(recap.year, recap.month)}</p>
-                      <p className="mt-1 text-xs font-bold text-stone-400">Saldo akhir bulan</p>
+                      <p className="text-lg font-bold text-slate-900">{monthLabel(recap.year, recap.month)}</p>
+                      <p className="mt-1 text-xs font-bold text-slate-400">Saldo akhir bulan</p>
                     </div>
-                    <p className="text-lg font-black text-stone-900">{rupiah(recap.endingBalance)}</p>
+                    <p className="text-lg font-bold text-slate-900">{rupiah(recap.endingBalance)}</p>
                   </div>
                   <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                     <div className="rounded-2xl bg-blush-100/80 p-3">
-                      <p className="text-xs font-black uppercase text-blush-500">Mpip</p>
-                      <p className="font-black text-stone-800">{rupiah(recap.mpipDeposit)}</p>
+                      <p className="text-xs font-bold uppercase text-blush-500">Mpip</p>
+                      <p className="font-bold text-stone-800">{rupiah(recap.mpipDeposit)}</p>
                     </div>
                     <div className="rounded-2xl bg-skysoft-100/80 p-3">
-                      <p className="text-xs font-black uppercase text-sky-400">Kakak</p>
-                      <p className="font-black text-sky-700">{rupiah(recap.kakakDeposit)}</p>
+                      <p className="text-xs font-bold uppercase text-sky-400">Kakak</p>
+                      <p className="font-bold text-sky-700">{rupiah(recap.kakakDeposit)}</p>
                     </div>
                     <div className="rounded-2xl bg-skysoft-100/80 p-3">
-                      <p className="text-xs font-black uppercase text-skysoft-500">Tambah</p>
-                      <p className="font-black text-stone-800">{rupiah(recap.additions)}</p>
+                      <p className="text-xs font-bold uppercase text-skysoft-500">Tambah</p>
+                      <p className="font-bold text-stone-800">{rupiah(recap.additions)}</p>
                     </div>
                     <div className="rounded-2xl bg-blush-100/80 p-3">
-                      <p className="text-xs font-black uppercase text-blush-500">Tarik</p>
-                      <p className="font-black text-stone-800">{rupiah(recap.withdrawals)}</p>
+                      <p className="text-xs font-bold uppercase text-blush-500">Tarik</p>
+                      <p className="font-bold text-stone-800">{rupiah(recap.withdrawals)}</p>
                     </div>
                   </div>
-                  <div className="mt-3 rounded-2xl palette-card p-3 text-sm font-black text-stone-700">
+                  <div className="mt-3 rounded-2xl palette-card p-3 text-sm font-bold text-slate-700">
                     Total setoran masuk: {rupiah(recap.totalRequiredDeposits)}
                   </div>
                 </div>
@@ -164,13 +164,13 @@ export default function RecapPage() {
                 <tbody className="divide-y divide-white">
                   {filteredRecaps.map((recap) => (
                     <tr key={recap.key}>
-                      <td className="table-td font-black">{monthLabel(recap.year, recap.month)}</td>
-                      <td className="table-td font-black text-stone-800">{rupiah(recap.mpipDeposit)}</td>
-                      <td className="table-td font-black text-sky-700">{rupiah(recap.kakakDeposit)}</td>
-                      <td className="table-td font-black">{rupiah(recap.totalRequiredDeposits)}</td>
-                      <td className="table-td font-black text-stone-800">{rupiah(recap.additions)}</td>
-                      <td className="table-td font-black text-stone-800">{rupiah(recap.withdrawals)}</td>
-                      <td className="table-td font-black">{rupiah(recap.endingBalance)}</td>
+                      <td className="table-td font-bold">{monthLabel(recap.year, recap.month)}</td>
+                      <td className="table-td font-bold text-stone-800">{rupiah(recap.mpipDeposit)}</td>
+                      <td className="table-td font-bold text-sky-700">{rupiah(recap.kakakDeposit)}</td>
+                      <td className="table-td font-bold">{rupiah(recap.totalRequiredDeposits)}</td>
+                      <td className="table-td font-bold text-stone-800">{rupiah(recap.additions)}</td>
+                      <td className="table-td font-bold text-stone-800">{rupiah(recap.withdrawals)}</td>
+                      <td className="table-td font-bold">{rupiah(recap.endingBalance)}</td>
                     </tr>
                   ))}
                 </tbody>

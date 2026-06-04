@@ -1,5 +1,5 @@
 import type { DepositStatus, MonthlyDeposit } from './types';
-import { toNumber } from './format';
+import { toNumber, todayInput } from './format';
 
 interface DepositStatusInput {
   paidAmount: number | string | null | undefined;
@@ -49,18 +49,18 @@ export function depositRemaining(deposit: Pick<MonthlyDeposit, 'paid_amount' | '
   return Math.max(toNumber(deposit.required_amount) - toNumber(deposit.paid_amount), 0);
 }
 
-export function isDepositOverdue(deposit: Pick<MonthlyDeposit, 'paid_amount' | 'required_amount' | 'due_date'>, today = new Date().toISOString().slice(0, 10)) {
+export function isDepositOverdue(deposit: Pick<MonthlyDeposit, 'paid_amount' | 'required_amount' | 'due_date'>, today = todayInput()) {
   return depositRemaining(deposit) > 0 && deposit.due_date < today;
 }
 
 export function statusBadgeClass(status: string | null | undefined) {
   switch (status) {
     case 'Terbayar':
-      return 'bg-skysoft-200 text-stone-800 ring-1 ring-skysoft-300';
+      return 'bg-skysoft-100 text-stone-800 ring-1 ring-skysoft-200';
     case 'Terbayar Telat':
-      return 'bg-creamsoft-200 text-stone-800 ring-1 ring-creamsoft-300';
+      return 'bg-creamsoft-100 text-stone-800 ring-1 ring-creamsoft-200';
     case 'Kurang':
-      return 'bg-blush-200 text-stone-800 ring-1 ring-blush-300';
+      return 'bg-blush-100 text-stone-800 ring-1 ring-blush-200';
     default:
       return 'bg-stone-100 text-stone-600 ring-1 ring-stone-200';
   }
@@ -71,7 +71,7 @@ export function statusDotClass(status: string | null | undefined) {
     case 'Terbayar':
       return 'bg-skysoft-300';
     case 'Terbayar Telat':
-      return 'bg-creamsoft-300';
+      return 'bg-creamsoft-200';
     case 'Kurang':
       return 'bg-blush-300';
     default:

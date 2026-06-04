@@ -14,28 +14,23 @@ const config: Config = {
           100: '#f6d9e9',
           200: '#DFB2CB',
           300: '#E3A2C8',
-          400: '#d982b3',
-          500: '#c96a9e'
+          400: '#d982b3'
         },
         skysoft: {
           50: '#f5f8fe',
           100: '#e2ebf8',
           200: '#B4C6E2',
           300: '#A4BBE0',
-          400: '#84a2d2',
-          500: '#6689bf'
+          400: '#84a2d2'
         },
         creamsoft: {
           50: '#fbfaf7',
           100: '#eeece6',
-          200: '#D9D8D3',
-          300: '#c8c6bf',
-          400: '#b6b2a9'
+          200: '#D9D8D3'
         }
       },
       boxShadow: {
-        soft: '0 18px 50px rgba(113, 110, 125, 0.14)',
-        dreamy: '0 24px 70px rgba(164, 187, 224, 0.22)'
+        soft: '0 12px 32px rgba(68, 64, 60, 0.08)'
       }
     }
   },

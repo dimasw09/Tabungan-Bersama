@@ -16,13 +16,13 @@ import { useToast } from '@/components/ui/ToastProvider';
 
 function StatCard({ icon, label, value, helper }: { icon: string; label: string; value: string; helper?: string }) {
   return (
-    <Card className="relative overflow-hidden palette-hero">
-      <div className="absolute -right-5 -top-5 h-20 w-20 rounded-full bg-gradient-to-br from-blush-100 to-skysoft-100" />
+    <Card className="relative overflow-hidden ">
+      <div className="absolute -right-5 -top-5 h-20 w-20 rounded-full bg-blue-50" />
       <div className="relative">
-        <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-white/75 text-xl shadow-sm">{icon}</div>
-        <p className="text-sm font-black text-stone-500">{label}</p>
-        <p className="mt-2 text-2xl font-black text-stone-900">{value}</p>
-        {helper ? <p className="mt-2 text-xs font-bold text-stone-400">{helper}</p> : null}
+        <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-xl shadow-sm">{icon}</div>
+        <p className="text-sm font-semibold text-slate-500">{label}</p>
+        <p className="mt-2 text-2xl font-bold text-slate-900">{value}</p>
+        {helper ? <p className="mt-2 text-xs font-medium text-slate-400">{helper}</p> : null}
       </div>
     </Card>
   );
@@ -83,12 +83,7 @@ export default function DashboardPage() {
     <main>
       <PageHeader
         title="Dashboard"
-        description="Ringkasan saldo, target bulan berjalan, dan progress tabungan bersama Kakak & Mpip. Data auto-refresh kalau salah satu dari kalian edit."
-        action={
-          <Link href="/deposits">
-            <Button>Input setoran</Button>
-          </Link>
-        }
+        description="Ringkasan saldo dan progress tabungan bulan ini."
       />
 
       {members.length === 0 ? (
@@ -100,37 +95,37 @@ export default function DashboardPage() {
               <div className="absolute -right-16 -top-16 h-52 w-52 rounded-full bg-blush-100/70" />
               <div className="absolute -bottom-20 right-24 h-56 w-56 rounded-full bg-skysoft-100/80" />
               <div className="relative">
-                <p className="inline-flex rounded-full bg-white/80 px-3 py-1 text-xs font-black uppercase tracking-[0.2em] text-blush-400">
+                <p className="inline-flex rounded-full bg-white/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-white">
                   Saldo Sekarang
                 </p>
-                <h2 className="mt-4 text-4xl font-black tracking-tight text-stone-900 md:text-6xl">{rupiah(totals.balance)}</h2>
+                <h2 className="mt-4 text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">{rupiah(totals.balance)}</h2>
                 <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-stone-500">
                   Saldo dihitung dari semua setoran masuk + mutasi tambah - penarikan. Cocok buat dipantau berdua dari link yang sama.
                 </p>
-                <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                  <Link href="/mutations">
-                    <Button variant="secondary" className="w-full sm:w-auto">Tambah mutasi</Button>
+                <div className="mt-6 grid grid-cols-2 gap-3">
+                  <Link href="/deposits">
+                    <Button className="w-full">Setoran</Button>
                   </Link>
-                  <Link href="/recap">
-                    <Button variant="ghost" className="w-full sm:w-auto">Lihat rekap</Button>
+                  <Link href="/mutations">
+                    <Button variant="secondary" className="w-full">Mutasi</Button>
                   </Link>
                 </div>
               </div>
             </Card>
 
             <Card>
-              <p className="text-sm font-black text-stone-500">Status {monthLabel(currentMonth.year, currentMonth.month)}</p>
+              <p className="text-sm font-semibold text-slate-500">Status {monthLabel(currentMonth.year, currentMonth.month)}</p>
               <div className="mt-4 flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-2xl font-black text-stone-900">{currentMonth.progress}%</p>
-                  <p className="mt-1 text-xs font-bold text-stone-400">{rupiah(currentMonth.paid)} / {rupiah(currentMonth.target)}</p>
+                  <p className="text-2xl font-bold text-slate-900">{currentMonth.progress}%</p>
+                  <p className="mt-1 text-xs font-medium text-slate-400">{rupiah(currentMonth.paid)} / {rupiah(currentMonth.target)}</p>
                 </div>
                 <span
                   className={`badge ${
                     currentMonth.status === 'Lengkap'
-                      ? 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200'
+                      ? 'bg-white text-[#3557bf] ring-1 ring-white/50'
                       : currentMonth.status === 'Lebih'
-                        ? 'bg-skysoft-100 text-sky-700 ring-1 ring-skysoft-200'
+                        ? 'bg-white/80 text-[#3557bf] ring-1 ring-white/50'
                         : 'bg-amber-100 text-amber-700 ring-1 ring-amber-200'
                   }`}
                 >
@@ -145,14 +140,14 @@ export default function DashboardPage() {
                   Masih kurang {rupiah(currentMonth.remaining)} bulan ini.
                 </div>
               ) : (
-                <div className="mt-5 rounded-3xl bg-emerald-50/80 p-4 text-sm font-semibold text-emerald-800">
+                <div className="mt-5 rounded-3xl bg-blue-50 p-4 text-sm font-medium text-[#3557bf]">
                   Bulan ini aman, setoran sudah lengkap 💖
                 </div>
               )}
             </Card>
           </section>
 
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <section className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
             <StatCard icon="💰" label="Saldo saat ini" value={rupiah(totals.balance)} helper="Setoran + tambahan - penarikan" />
             <StatCard icon="📥" label="Total setoran masuk" value={rupiah(totals.totalDeposits)} />
             <StatCard icon="✨" label="Total tambahan" value={rupiah(totals.totalAdditions)} />
@@ -185,7 +180,7 @@ export default function DashboardPage() {
                         <p className="text-xs font-black uppercase tracking-wide text-stone-400">Masuk</p>
                         <p className="mt-1 text-xl font-black text-stone-900">{rupiah(item.paid)}</p>
                       </div>
-                      <p className="text-sm font-black text-stone-500">{item.progress}%</p>
+                      <p className="text-sm font-semibold text-slate-500">{item.progress}%</p>
                     </div>
                     <div className="mt-3 h-3 overflow-hidden rounded-full bg-white">
                       <div className="h-full rounded-full bg-gradient-to-r from-blush-300 via-creamsoft-200 to-skysoft-300" style={{ width: `${item.progress}%` }} />
@@ -194,7 +189,7 @@ export default function DashboardPage() {
                       <span>Wajib {rupiah(item.required)}</span>
                       <span>Kurang {rupiah(item.remaining)}</span>
                     </div>
-                    <p className="mt-2 text-xs font-bold text-stone-400">Jatuh tempo: {formatDate(item.deposit?.due_date)}</p>
+                    <p className="mt-2 text-xs font-medium text-slate-400">Jatuh tempo: {formatDate(item.deposit?.due_date)}</p>
                   </div>
                 ))}
               </div>
@@ -214,7 +209,7 @@ export default function DashboardPage() {
                         <span className={`badge ${mutation.type === 'Tambah' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>{mutation.type}</span>
                         <span className="text-sm font-black text-stone-900">{rupiah(mutation.amount)}</span>
                       </div>
-                      <p className="mt-2 text-xs font-bold text-stone-400">{formatDate(mutation.mutation_date)}</p>
+                      <p className="mt-2 text-xs font-medium text-slate-400">{formatDate(mutation.mutation_date)}</p>
                       <p className="mt-1 line-clamp-2 text-sm font-semibold text-stone-600">{mutation.description || '-'}</p>
                     </div>
                   ))}

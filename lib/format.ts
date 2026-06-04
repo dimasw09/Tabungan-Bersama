@@ -71,5 +71,6 @@ export function currentYearMonth() {
 }
 
 export function todayInput() {
-  return new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  return dateInput(now.getFullYear(), now.getMonth() + 1, now.getDate());
 }

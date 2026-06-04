@@ -13,9 +13,9 @@ export function Modal({ open, title, children, onClose }: ModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 p-4 backdrop-blur-sm">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-[2rem] bg-white p-5 shadow-soft">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-[2rem] bg-white p-5 shadow-lg">
         <div className="mb-4 flex items-center justify-between gap-4">
-          <h2 className="text-lg font-black text-stone-800">{title}</h2>
+          <h2 className="text-lg font-bold text-slate-900">{title}</h2>
           <Button type="button" variant="ghost" onClick={onClose}>
             Tutup
           </Button>

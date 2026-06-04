@@ -1,8 +1,8 @@
 export function EmptyState({ title, description }: { title: string; description?: string }) {
   return (
-    <div className="rounded-[2rem] border border-dashed border-blush-300 palette-card p-8 text-center shadow-sm">
-      <p className="text-lg font-black text-stone-800">{title}</p>
-      {description ? <p className="mt-2 text-sm font-semibold text-stone-500">{description}</p> : null}
+    <div className="rounded-3xl border border-dashed border-stone-300 bg-white p-8 text-center">
+      <p className="text-lg font-bold text-stone-700">{title}</p>
+      {description ? <p className="mt-2 text-sm text-stone-500">{description}</p> : null}
     </div>
   );
 }

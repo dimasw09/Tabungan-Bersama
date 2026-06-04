@@ -3,7 +3,8 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import type { MutationType, MonthlyDeposit, OtherMutation } from '@/lib/types';
-import { currentYearMonth, formatDate, rupiah, todayInput } from '@/lib/format';
+import { currentYearMonth, formatDate, monthLabel, rupiah, todayInput } from '@/lib/format';
+import { calculateMonthlyRecaps } from '@/lib/calculations';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -20,11 +21,11 @@ const emptyForm = {
 };
 
 function SummaryCard({ label, value, tone = 'neutral' }: { label: string; value: string; tone?: 'neutral' | 'green' | 'red' }) {
-  const toneClass = tone === 'green' ? 'text-stone-800' : tone === 'red' ? 'text-stone-800' : 'text-stone-900';
+  const toneClass = tone === 'green' ? 'text-stone-800' : tone === 'red' ? 'text-stone-800' : 'text-slate-900';
   return (
-    <div className="rounded-[1.5rem] bg-white/70 p-4 shadow-sm">
-      <p className="text-xs font-black uppercase tracking-wide text-stone-400">{label}</p>
-      <p className={`mt-1 text-xl font-black ${toneClass}`}>{value}</p>
+    <div className="rounded-[1.5rem] bg-white p-4 shadow-sm">
+      <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className={`mt-1 text-xl font-bold ${toneClass}`}>{value}</p>
     </div>
   );
 }
@@ -39,8 +40,15 @@ type ConfirmAction = {
 
 function isValidDateText(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const date = new Date(`${value}T00:00:00`);
-  return !Number.isNaN(date.getTime()) && value === date.toISOString().slice(0, 10);
+
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+  );
 }
 
 export default function MutationsPage() {
@@ -57,6 +65,8 @@ export default function MutationsPage() {
   const [search, setSearch] = useState('');
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
+  const [showSimpleForm, setShowSimpleForm] = useState(false);
+  const [showSimpleFilter, setShowSimpleFilter] = useState(false);
 
   async function fetchMutations(showLoading = true) {
     if (showLoading) setLoading(true);
@@ -143,6 +153,7 @@ export default function MutationsPage() {
   function resetForm() {
     setForm(emptyForm);
     setEditing(null);
+    setShowSimpleForm(false);
   }
 
   function resetFilters() {
@@ -150,6 +161,7 @@ export default function MutationsPage() {
     setFilterMonth('all');
     setFilterType('all');
     setSearch('');
+    setShowSimpleFilter(false);
   }
 
   function startEdit(mutation: OtherMutation) {
@@ -160,6 +172,7 @@ export default function MutationsPage() {
       amount: Number(mutation.amount),
       description: mutation.description || ''
     });
+    setShowSimpleForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -199,6 +212,11 @@ export default function MutationsPage() {
       return;
     }
 
+    if (form.type === 'Penarikan' && description.length === 0) {
+      toast({ title: 'Keterangan wajib diisi', message: 'Penarikan wajib punya keterangan supaya jelas uangnya dipakai untuk apa.', type: 'error' });
+      return;
+    }
+
     const balanceWithoutCurrentMutation = (() => {
       const depositsTotal = deposits.reduce((sum, deposit) => sum + Number(deposit.paid_amount || 0), 0);
       const otherRows = mutations.filter((mutation) => mutation.id !== editing?.id);
@@ -211,6 +229,28 @@ export default function MutationsPage() {
       toast({
         title: 'Saldo tidak cukup',
         message: `Saldo tersedia ${rupiah(balanceWithoutCurrentMutation)}, penarikan tidak boleh lebih besar dari saldo.`,
+        type: 'error'
+      });
+      return;
+    }
+
+    const nextMutation = {
+      id: editing?.id || 'preview',
+      mutation_date: form.mutation_date,
+      type: form.type,
+      amount,
+      description: description || null,
+      created_at: editing?.created_at || '',
+      updated_at: editing?.updated_at || ''
+    } as OtherMutation;
+
+    const nextMutations = [...mutations.filter((mutation) => mutation.id !== editing?.id), nextMutation];
+    const negativeRecap = calculateMonthlyRecaps(deposits, nextMutations).find((recap) => recap.endingBalance < 0);
+
+    if (negativeRecap) {
+      toast({
+        title: 'Rekap jadi minus',
+        message: `Saldo akhir ${monthLabel(negativeRecap.year, negativeRecap.month)} akan menjadi ${rupiah(negativeRecap.endingBalance)}. Ubah nominal/tanggal mutasi dulu.`,
         type: 'error'
       });
       return;
@@ -266,11 +306,11 @@ export default function MutationsPage() {
       />
 
       <div className="grid gap-5 lg:grid-cols-[420px_1fr]">
-        <Card>
+        <Card className={`${showSimpleForm || editing ? 'block' : 'hidden'}`}>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-lg font-black text-stone-900">{editing ? 'Edit Mutasi' : 'Tambah Mutasi'}</h2>
-              <p className="mt-1 text-sm font-semibold text-stone-500">Isi transaksi tambahan atau penarikan.</p>
+              <h2 className="text-lg font-bold text-slate-900">{editing ? 'Edit Mutasi' : 'Tambah Mutasi'}</h2>
+              <p className="mt-1 text-sm font-semibold text-slate-500">Isi transaksi tambahan atau penarikan.</p>
             </div>
             <span className={`badge ${form.type === 'Tambah' ? 'bg-emerald-100 text-stone-800' : 'bg-rose-100 text-stone-800'}`}>{form.type}</span>
           </div>
@@ -286,14 +326,14 @@ export default function MutationsPage() {
                 <button
                   type="button"
                   onClick={() => setForm({ ...form, type: 'Tambah' })}
-                  className={`rounded-2xl px-4 py-3 text-sm font-black transition ${form.type === 'Tambah' ? 'bg-emerald-100 text-stone-800 ring-2 ring-emerald-200' : 'bg-white/90 text-stone-500'}`}
+                  className={`rounded-2xl px-4 py-3 text-sm font-bold transition ${form.type === 'Tambah' ? 'bg-emerald-100 text-stone-800 ring-2 ring-emerald-200' : 'bg-white/90 text-slate-500'}`}
                 >
                   Tambah
                 </button>
                 <button
                   type="button"
                   onClick={() => setForm({ ...form, type: 'Penarikan' })}
-                  className={`rounded-2xl px-4 py-3 text-sm font-black transition ${form.type === 'Penarikan' ? 'bg-rose-100 text-stone-800 ring-2 ring-rose-200' : 'bg-white/90 text-stone-500'}`}
+                  className={`rounded-2xl px-4 py-3 text-sm font-bold transition ${form.type === 'Penarikan' ? 'bg-rose-100 text-stone-800 ring-2 ring-rose-200' : 'bg-white/90 text-slate-500'}`}
                 >
                   Penarikan
                 </button>
@@ -302,11 +342,11 @@ export default function MutationsPage() {
             <div>
               <label className="form-label">Nominal</label>
               <input className="form-input mt-2" type="number" value={form.amount} onChange={(event) => setForm({ ...form, amount: Number(event.target.value) })} min={1} />
-              <p className="mt-1 text-xs font-bold text-stone-400">Preview: {rupiah(form.amount)}</p>
+              <p className="mt-1 text-xs font-bold text-slate-400">Preview: {rupiah(form.amount)}</p>
             </div>
             <div>
               <label className="form-label">Keterangan</label>
-              <textarea className="form-input mt-2 min-h-28" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Contoh: bonus, hadiah, ambil buat kebutuhan..." />
+              <textarea className="form-input mt-2 min-h-28" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Contoh: bonus, hadiah, ambil buat kebutuhan... Penarikan wajib ada keterangan." />
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button type="submit" disabled={saving} className="w-full sm:w-auto">
@@ -330,7 +370,7 @@ export default function MutationsPage() {
             <SummaryCard label="Jumlah data" value={`${summary.count}`} />
           </div>
 
-          <div className="mb-5 grid gap-3 md:grid-cols-5">
+          <div className={`${showSimpleFilter ? 'grid' : 'hidden'} mb-5 gap-3 md:grid-cols-5`}>
             <select className="form-input" value={filterYear} onChange={(event) => setFilterYear(event.target.value)}>
               <option value="all">Semua tahun</option>
               {years.map((year) => (
@@ -368,18 +408,23 @@ export default function MutationsPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <span className={`badge ${mutation.type === 'Tambah' ? 'bg-emerald-100 text-stone-800' : 'bg-rose-100 text-stone-800'}`}>{mutation.type}</span>
-                        <p className="mt-3 text-2xl font-black text-stone-900">{rupiah(mutation.amount)}</p>
+                        <p className="mt-3 text-2xl font-bold text-slate-900">{rupiah(mutation.amount)}</p>
                       </div>
-                      <p className="text-xs font-bold text-stone-400">{formatDate(mutation.mutation_date)}</p>
+                      <p className="text-xs font-bold text-slate-400">{formatDate(mutation.mutation_date)}</p>
                     </div>
                     <p className="mt-3 rounded-2xl palette-card p-3 text-sm font-semibold text-stone-600">{mutation.description || '-'}</p>
-                    <div className="mt-4 flex justify-end gap-2">
-                      <Button type="button" variant="secondary" onClick={() => startEdit(mutation)}>
-                        Edit
-                      </Button>
-                      <Button type="button" variant="danger" onClick={() => deleteMutation(mutation)}>
-                        Hapus
-                      </Button>
+                    <div className="mt-4 flex justify-end">
+                      <details className="action-menu">
+                        <summary>Action</summary>
+                        <div className="action-menu-panel space-y-2">
+                          <Button type="button" variant="secondary" className="w-full" onClick={() => startEdit(mutation)}>
+                            Edit
+                          </Button>
+                          <Button type="button" variant="danger" className="w-full" onClick={() => deleteMutation(mutation)}>
+                            Hapus
+                          </Button>
+                        </div>
+                      </details>
                     </div>
                   </div>
                 ))}
@@ -399,13 +444,13 @@ export default function MutationsPage() {
                   <tbody className="divide-y divide-white">
                     {filteredMutations.map((mutation) => (
                       <tr key={mutation.id}>
-                        <td className="table-td font-black">{formatDate(mutation.mutation_date)}</td>
+                        <td className="table-td font-bold">{formatDate(mutation.mutation_date)}</td>
                         <td className="table-td">
                           <span className={`badge ${mutation.type === 'Tambah' ? 'bg-emerald-100 text-stone-800' : 'bg-rose-100 text-stone-800'}`}>
                             {mutation.type}
                           </span>
                         </td>
-                        <td className="table-td font-black">{rupiah(mutation.amount)}</td>
+                        <td className="table-td font-bold">{rupiah(mutation.amount)}</td>
                         <td className="table-td max-w-xs truncate">{mutation.description || '-'}</td>
                         <td className="table-td">
                           <div className="flex gap-2">

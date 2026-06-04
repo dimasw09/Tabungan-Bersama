@@ -32,13 +32,13 @@ function sortDefaultMembers(a: Member, b: Member) {
 
 function MemberBigCard({ member, onEdit }: { member: Member; onEdit: (member: Member) => void }) {
   return (
-    <div className="relative overflow-hidden rounded-[2rem] border border-white/80 bg-white/90 p-5 shadow-sm">
+    <div className="relative overflow-hidden rounded-[2rem] border border-slate-100 bg-white/90 p-5 shadow-sm">
       <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full opacity-70" style={{ backgroundColor: member.color || (member.name === 'Mpip' ? '#E3A2C8' : '#A4BBE0') }} />
       <div className="relative">
-        <span className="badge text-stone-700" style={{ backgroundColor: member.color || (member.name === 'Mpip' ? '#E3A2C8' : '#A4BBE0') }}>{member.name}</span>
-        <p className="mt-5 text-xs font-black uppercase tracking-wide text-stone-400">Setoran wajib</p>
-        <p className="mt-1 text-3xl font-black text-stone-900">{rupiah(member.monthly_amount)}</p>
-        <p className="mt-2 text-sm font-bold text-stone-500">Setor tiap tanggal {member.payday}</p>
+        <span className="badge text-slate-700" style={{ backgroundColor: member.color || (member.name === 'Mpip' ? '#E3A2C8' : '#A4BBE0') }}>{member.name}</span>
+        <p className="mt-5 text-xs font-bold uppercase tracking-wide text-slate-400">Setoran wajib</p>
+        <p className="mt-1 text-3xl font-bold text-slate-900">{rupiah(member.monthly_amount)}</p>
+        <p className="mt-2 text-sm font-bold text-slate-500">Setor tiap tanggal {member.payday}</p>
         <Button type="button" variant="secondary" className="mt-5" onClick={() => onEdit(member)}>
           Edit setting
         </Button>
@@ -210,7 +210,7 @@ export default function MembersPage() {
     <main>
       <PageHeader
         title="Data Anggota"
-        description="Anggota dikunci hanya Kakak dan Mpip. Nama tidak bisa ditambah/hapus/rename, tapi nominal, tanggal setor, dan warna label bisa diatur."
+        description="Setting nominal, tanggal setor, dan warna label Kakak & Mpip."
       />
 
       {members.length < 2 ? (
@@ -224,9 +224,9 @@ export default function MembersPage() {
 
       <div className="mb-5 grid gap-4 md:grid-cols-3">
         <Card>
-          <p className="text-sm font-black text-stone-500">Target bulanan</p>
-          <p className="mt-2 text-3xl font-black text-stone-900">{rupiah(monthlyTarget)}</p>
-          <p className="mt-1 text-xs font-bold text-stone-400">Total setoran wajib Kakak + Mpip</p>
+          <p className="text-sm font-bold text-slate-500">Target bulanan</p>
+          <p className="mt-2 text-3xl font-bold text-slate-900">{rupiah(monthlyTarget)}</p>
+          <p className="mt-1 text-xs font-bold text-slate-400">Total setoran wajib Kakak + Mpip</p>
         </Card>
         {members.map((member) => (
           <MemberBigCard key={member.id} member={member} onEdit={startEdit} />
@@ -235,8 +235,8 @@ export default function MembersPage() {
 
       <div className="grid gap-5 lg:grid-cols-[420px_1fr]">
         <Card>
-          <h2 className="text-lg font-black text-stone-900">{editingMember ? `Edit ${editingMember.name}` : 'Pilih anggota'}</h2>
-          <p className="mt-2 text-sm font-semibold text-stone-500">
+          <h2 className="text-lg font-bold text-slate-900">{editingMember ? `Edit ${editingMember.name}` : 'Pilih anggota'}</h2>
+          <p className="mt-2 text-sm font-semibold text-slate-500">
             Kalau nominal/tanggal setor diubah, setoran yang belum dibayar bisa otomatis ikut disesuaikan supaya data ke depan tetap rapi.
           </p>
 
@@ -244,7 +244,7 @@ export default function MembersPage() {
             <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
               <div>
                 <label className="form-label">Nama</label>
-                <input className="form-input mt-2 bg-stone-100 text-stone-500" value={editingMember.name} disabled />
+                <input className="form-input mt-2 bg-stone-100 text-slate-500" value={editingMember.name} disabled />
               </div>
               <div>
                 <label className="form-label">Nominal setoran wajib</label>
@@ -255,7 +255,7 @@ export default function MembersPage() {
                   onChange={(event) => setForm({ ...form, monthly_amount: Number(event.target.value) })}
                   min={1}
                 />
-                <p className="mt-1 text-xs font-bold text-stone-500">Preview: {rupiah(form.monthly_amount)}</p>
+                <p className="mt-1 text-xs font-bold text-slate-500">Preview: {rupiah(form.monthly_amount)}</p>
               </div>
               <div>
                 <label className="form-label">Tanggal setor bulanan</label>
@@ -326,12 +326,12 @@ export default function MembersPage() {
                 {members.map((member) => (
                   <div key={member.id} className="mobile-data-card">
                     <div className="flex items-start justify-between gap-3">
-                      <span className="badge text-stone-700" style={{ backgroundColor: member.color || (member.name === 'Mpip' ? '#E3A2C8' : '#A4BBE0') }}>{member.name}</span>
+                      <span className="badge text-slate-700" style={{ backgroundColor: member.color || (member.name === 'Mpip' ? '#E3A2C8' : '#A4BBE0') }}>{member.name}</span>
                       <span className="inline-block h-8 w-14 rounded-full border border-white shadow-sm" style={{ backgroundColor: member.color || (member.name === 'Mpip' ? '#E3A2C8' : '#A4BBE0') }} />
                     </div>
-                    <p className="mt-4 text-xs font-black uppercase tracking-wide text-stone-400">Nominal wajib</p>
-                    <p className="mt-1 text-2xl font-black text-stone-900">{rupiah(member.monthly_amount)}</p>
-                    <p className="mt-2 text-sm font-bold text-stone-500">Setor tanggal {member.payday}</p>
+                    <p className="mt-4 text-xs font-bold uppercase tracking-wide text-slate-400">Nominal wajib</p>
+                    <p className="mt-1 text-2xl font-bold text-slate-900">{rupiah(member.monthly_amount)}</p>
+                    <p className="mt-2 text-sm font-bold text-slate-500">Setor tanggal {member.payday}</p>
                     <Button type="button" variant="secondary" className="mt-4 w-full" onClick={() => startEdit(member)}>
                       Edit
                     </Button>
@@ -354,11 +354,11 @@ export default function MembersPage() {
                     {members.map((member) => (
                       <tr key={member.id}>
                         <td className="table-td">
-                          <span className="badge text-stone-700" style={{ backgroundColor: member.color || (member.name === 'Mpip' ? '#E3A2C8' : '#A4BBE0') }}>
+                          <span className="badge text-slate-700" style={{ backgroundColor: member.color || (member.name === 'Mpip' ? '#E3A2C8' : '#A4BBE0') }}>
                             {member.name}
                           </span>
                         </td>
-                        <td className="table-td font-black">{rupiah(member.monthly_amount)}</td>
+                        <td className="table-td font-bold">{rupiah(member.monthly_amount)}</td>
                         <td className="table-td">Tanggal {member.payday}</td>
                         <td className="table-td">
                           <span className="inline-block h-7 w-14 rounded-full border border-white" style={{ backgroundColor: member.color || (member.name === 'Mpip' ? '#E3A2C8' : '#A4BBE0') }} />

@@ -1,18 +1,16 @@
 'use client';
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import type { DepositStatus, Member, MonthlyDeposit } from '@/lib/types';
 import {
   depositProgress,
   depositRemaining,
-  getComputedDepositStatus,
   getDepositStatus,
   isDepositOverdue,
   normalizeDepositStatuses,
   statusBadgeClass
 } from '@/lib/depositStatus';
-import { calculateFilteredDepositSummary } from '@/lib/calculations';
 import { buildMonthlyDepositRows } from '@/lib/generate';
 import { currentYearMonth, formatDate, monthLabel, rupiah, safeDueDate, todayInput } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
@@ -25,18 +23,66 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { useToast } from '@/components/ui/ToastProvider';
 
 const initialYearMonth = currentYearMonth();
-const today = todayInput();
+const DEFAULT_MEMBER_ORDER = ['Mpip', 'Kakak'];
 
-const emptyForm = {
-  member_id: '',
-  year: initialYearMonth.year,
-  month: initialYearMonth.month,
-  due_date: safeDueDate(initialYearMonth.year, initialYearMonth.month, 10),
-  required_amount: 0,
-  actual_transfer_date: '',
-  paid_amount: 0,
-  proofFile: null as File | null
+type DepositRow = {
+  member: Member;
+  deposit: MonthlyDeposit | null;
+  year: number;
+  month: number;
+  due_date: string;
+  required_amount: number;
+  actual_transfer_date: string | null;
+  paid_amount: number;
+  proof_image_url: string | null;
+  status: DepositStatus;
 };
+
+type PaymentDraft = {
+  member: Member;
+  deposit: MonthlyDeposit | null;
+  year: number;
+  month: number;
+  due_date: string;
+  required_amount: number;
+  actual_transfer_date: string;
+  paid_amount: number;
+  proofFile: File | null;
+  mode: 'quick' | 'custom';
+};
+
+type ConfirmAction = {
+  title: string;
+  description?: string;
+  confirmLabel?: string;
+  tone?: 'danger' | 'primary';
+  onConfirm: () => Promise<void> | void;
+};
+
+function sortMembers(a: Member, b: Member) {
+  const aIndex = DEFAULT_MEMBER_ORDER.indexOf(a.name);
+  const bIndex = DEFAULT_MEMBER_ORDER.indexOf(b.name);
+  if (aIndex !== -1 || bIndex !== -1) return (aIndex === -1 ? 99 : aIndex) - (bIndex === -1 ? 99 : bIndex);
+  return a.name.localeCompare(b.name);
+}
+
+function isValidDateText(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+  );
+}
+
+function shiftMonth(year: number, month: number, diff: number) {
+  const date = new Date(year, month - 1 + diff, 1);
+  return { year: date.getFullYear(), month: date.getMonth() + 1 };
+}
 
 function ProofThumbnail({ path, onPreview }: { path: string | null; onPreview: (url: string) => void }) {
   const [url, setUrl] = useState<string | null>(null);
@@ -66,80 +112,200 @@ function ProofThumbnail({ path, onPreview }: { path: string | null; onPreview: (
     };
   }, [path]);
 
-  if (!path) return <span className="text-xs font-bold text-stone-400">Belum ada</span>;
-  if (!url) return <span className="text-xs font-bold text-stone-400">Loading foto...</span>;
+  if (!path) return <span className="text-xs font-semibold text-slate-400">Belum ada bukti</span>;
+  if (!url) return <span className="text-xs font-semibold text-slate-400">Loading foto...</span>;
 
   return (
-    <button type="button" onClick={() => onPreview(url)} className="group overflow-hidden rounded-2xl border border-white bg-white shadow-sm">
+    <button type="button" onClick={() => onPreview(url)} className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <img src={url} alt="Bukti transfer" className="h-14 w-14 object-cover transition group-hover:scale-105" />
     </button>
   );
 }
 
-function MiniSummaryCard({ label, value, helper }: { label: string; value: string; helper?: string }) {
+function PaymentCard({
+  row,
+  onQuick,
+  onCustom,
+  onReset,
+  onDelete,
+  onPreview,
+  saving
+}: {
+  row: DepositRow;
+  onQuick: (row: DepositRow) => void;
+  onCustom: (row: DepositRow) => void;
+  onReset: (row: DepositRow) => void;
+  onDelete: (row: DepositRow) => void;
+  onPreview: (url: string) => void;
+  saving: boolean;
+}) {
+  const progress = depositProgress({ paid_amount: row.paid_amount, required_amount: row.required_amount });
+  const remaining = depositRemaining({ paid_amount: row.paid_amount, required_amount: row.required_amount });
+  const overdue = isDepositOverdue({ paid_amount: row.paid_amount, required_amount: row.required_amount, due_date: row.due_date });
+  const hasPayment = row.paid_amount > 0;
+
   return (
-    <div className="rounded-[1.5rem] bg-white/70 p-4 shadow-sm">
-      <p className="text-xs font-black uppercase tracking-wide text-stone-400">{label}</p>
-      <p className="mt-1 text-lg font-black text-stone-900">{value}</p>
-      {helper ? <p className="mt-1 text-xs font-bold text-stone-400">{helper}</p> : null}
+    <div className="rounded-[28px] border border-slate-100 bg-white p-5 shadow-sm" style={{ boxShadow: '0 12px 30px rgba(52, 77, 147, 0.10)' }}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <span className="badge text-slate-700" style={{ backgroundColor: row.member.color || (row.member.name === 'Mpip' ? '#E3A2C8' : '#A4BBE0') }}>
+            {row.member.name}
+          </span>
+          <p className="mt-3 text-2xl font-bold text-slate-900">{rupiah(row.required_amount)}</p>
+          <p className="mt-1 text-sm font-medium text-slate-500">Jatuh tempo {formatDate(row.due_date)}</p>
+        </div>
+        <span className={`badge ${statusBadgeClass(row.status)}`}>{row.status}</span>
+      </div>
+
+      <div className="mt-5 rounded-2xl bg-slate-50 p-4">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Sudah masuk</p>
+            <p className="mt-1 text-xl font-bold text-slate-900">{rupiah(row.paid_amount)}</p>
+          </div>
+          <p className="text-sm font-semibold text-[#3557bf]">{progress}%</p>
+        </div>
+        <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white">
+          <div className="h-full rounded-full bg-[#4267d6]" style={{ width: `${progress}%` }} />
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-slate-500">
+          <span>TF: {formatDate(row.actual_transfer_date)}</span>
+          {remaining > 0 ? <span className="text-[#b44967]">• Kurang {rupiah(remaining)}</span> : null}
+          {overdue ? <span className="text-amber-700">• Lewat jatuh tempo</span> : null}
+        </div>
+      </div>
+
+      <div className="mt-5 flex items-center justify-between gap-3">
+        <ProofThumbnail path={row.proof_image_url} onPreview={onPreview} />
+        <div className="flex items-center justify-end gap-2">
+          <Button type="button" variant={remaining > 0 ? 'primary' : 'secondary'} onClick={() => onQuick(row)} disabled={saving}>
+            {remaining > 0 ? 'Setor Lunas' : 'Update Bukti'}
+          </Button>
+          <Button type="button" variant="secondary" onClick={() => onCustom(row)} disabled={saving}>
+            Custom
+          </Button>
+          <details className="action-menu">
+            <summary>•••</summary>
+            <div className="action-menu-panel space-y-2">
+              <Button type="button" variant="secondary" className="w-full" onClick={() => onCustom(row)}>
+                Edit
+              </Button>
+              {hasPayment || row.proof_image_url ? (
+                <Button type="button" variant="secondary" className="w-full" onClick={() => onReset(row)}>
+                  Reset
+                </Button>
+              ) : null}
+              {row.deposit ? (
+                <Button type="button" variant="danger" className="w-full" onClick={() => onDelete(row)}>
+                  Hapus
+                </Button>
+              ) : null}
+            </div>
+          </details>
+        </div>
+      </div>
     </div>
   );
 }
 
-type ConfirmAction = {
-  title: string;
-  description?: string;
-  confirmLabel?: string;
-  tone?: 'danger' | 'primary';
-  onConfirm: () => Promise<void> | void;
-};
+function LocalProofPreview({ file }: { file: File | null }) {
+  const [url, setUrl] = useState<string | null>(null);
 
-function isValidDateText(value: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const date = new Date(`${value}T00:00:00`);
-  return !Number.isNaN(date.getTime()) && value === date.toISOString().slice(0, 10);
+  useEffect(() => {
+    if (!file) {
+      setUrl(null);
+      return;
+    }
+
+    const nextUrl = URL.createObjectURL(file);
+    setUrl(nextUrl);
+
+    return () => {
+      URL.revokeObjectURL(nextUrl);
+    };
+  }, [file]);
+
+  if (!file || !url) return null;
+
+  return (
+    <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+      <p className="mb-2 text-xs font-semibold text-slate-500">Preview bukti yang akan disimpan</p>
+      <img src={url} alt="Preview bukti transfer baru" className="max-h-48 w-full rounded-2xl object-contain bg-white" />
+      <p className="mt-2 text-xs font-semibold text-slate-400">{file.name}</p>
+    </div>
+  );
 }
 
-function dateInSelectedMonth(dateText: string, year: number, month: number) {
-  if (!isValidDateText(dateText)) return false;
-  const [dateYear, dateMonth] = dateText.split('-').map(Number);
-  return dateYear === year && dateMonth === month;
+function MiniSummaryCard({ label, value, helper }: { label: string; value: string; helper?: string }) {
+  return (
+    <div className="rounded-[22px] bg-white p-4 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="mt-1 text-lg font-bold text-slate-900">{value}</p>
+      {helper ? <p className="mt-1 text-xs font-medium text-slate-400">{helper}</p> : null}
+    </div>
+  );
 }
 
-function validateDepositForm(form: typeof emptyForm) {
-  const year = Number(form.year);
-  const month = Number(form.month);
-  const requiredAmount = Number(form.required_amount);
-  const paidAmount = Number(form.paid_amount || 0);
+function validatePaymentDraft(draft: PaymentDraft | null) {
+  if (!draft) return 'Data setoran belum dipilih.';
 
-  if (!form.member_id) return 'Anggota wajib dipilih.';
-  if (!Number.isInteger(year) || year < 2026 || year > 2100) return 'Tahun harus angka valid minimal 2026.';
-  if (!Number.isInteger(month) || month < 1 || month > 12) return 'Bulan harus di antara 1 sampai 12.';
-  if (!form.due_date || !isValidDateText(form.due_date)) return 'Tanggal jatuh tempo wajib diisi dengan format tanggal valid.';
-  if (!dateInSelectedMonth(form.due_date, year, month)) return 'Tanggal jatuh tempo harus berada di bulan dan tahun setoran yang dipilih.';
-  if (!Number.isFinite(requiredAmount) || requiredAmount <= 0) return 'Nominal wajib harus lebih dari 0.';
-  if (!Number.isFinite(paidAmount) || paidAmount < 0) return 'Nominal masuk tidak boleh kosong/minus.';
-  if (paidAmount > 0 && !form.actual_transfer_date) return 'Tanggal transfer aktual wajib diisi kalau nominal masuk sudah diisi.';
-  if (form.actual_transfer_date && !isValidDateText(form.actual_transfer_date)) return 'Tanggal transfer aktual tidak valid.';
-  if (form.actual_transfer_date && form.actual_transfer_date > today) return 'Tanggal transfer aktual tidak boleh lebih dari hari ini.';
-  if (form.proofFile && !form.proofFile.type.startsWith('image/')) return 'Foto bukti TF wajib berupa file gambar.';
-  if (form.proofFile && form.proofFile.size > 5 * 1024 * 1024) return 'Ukuran foto bukti TF maksimal 5MB.';
+  const paidAmount = Number(draft.paid_amount || 0);
+  const requiredAmount = Number(draft.required_amount || 0);
+  const hasExistingProof = Boolean(draft.deposit?.proof_image_url);
+  const hasNewProof = Boolean(draft.proofFile);
+
+  if (!Number.isFinite(requiredAmount) || requiredAmount <= 0) return 'Nominal wajib setoran tidak valid.';
+  if (!Number.isFinite(paidAmount) || paidAmount < 0) return 'Nominal masuk tidak boleh minus.';
+  if (paidAmount > 1000000000) return 'Nominal masuk terlalu besar. Maksimal Rp1.000.000.000.';
+  if (paidAmount > 0 && !draft.actual_transfer_date) return 'Tanggal transfer wajib diisi kalau nominal masuk lebih dari 0.';
+  if (draft.actual_transfer_date && !isValidDateText(draft.actual_transfer_date)) return 'Tanggal transfer tidak valid.';
+  if (draft.actual_transfer_date && draft.actual_transfer_date > todayInput()) return 'Tanggal transfer tidak boleh lebih dari hari ini.';
+  if (paidAmount > 0 && !hasExistingProof && !hasNewProof) return 'Foto bukti TF wajib diupload kalau nominal masuk lebih dari 0.';
+  if (paidAmount <= 0 && hasNewProof) return 'Nominal masuk harus lebih dari 0 kalau upload bukti TF.';
+  if (draft.proofFile && !draft.proofFile.type.startsWith('image/')) return 'Foto bukti TF wajib berupa file gambar.';
+  if (draft.proofFile && draft.proofFile.size > 5 * 1024 * 1024) return 'Ukuran foto bukti TF maksimal 5MB.';
 
   return null;
 }
 
+function getPaymentDraftWarnings(draft: PaymentDraft) {
+  const warnings: string[] = [];
+  const paidAmount = Number(draft.paid_amount || 0);
+  const requiredAmount = Number(draft.required_amount || 0);
+
+  if (paidAmount > requiredAmount) {
+    warnings.push(`Nominal masuk lebih besar dari setoran wajib. Kelebihan ${rupiah(paidAmount - requiredAmount)} akan ikut menambah saldo.`);
+  }
+
+  if (draft.actual_transfer_date && isValidDateText(draft.actual_transfer_date)) {
+    const [transferYear, transferMonth] = draft.actual_transfer_date.split('-').map(Number);
+    if (transferYear !== draft.year || transferMonth !== draft.month) {
+      warnings.push(`Tanggal transfer berada di luar periode ${monthLabel(draft.year, draft.month)}. Data tetap akan dicatat untuk periode tersebut.`);
+    }
+  }
+
+  if (paidAmount > 0 && paidAmount < requiredAmount) {
+    warnings.push(`Nominal masuk kurang ${rupiah(requiredAmount - paidAmount)} dari setoran wajib. Status akan menjadi Kurang.`);
+  }
+
+  return warnings;
+}
+
+
 export default function DepositsPage() {
   const { toast } = useToast();
+  const today = todayInput();
   const [members, setMembers] = useState<Member[]>([]);
   const [deposits, setDeposits] = useState<MonthlyDeposit[]>([]);
-  const [form, setForm] = useState(emptyForm);
-  const [editing, setEditing] = useState<MonthlyDeposit | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [quickSavingId, setQuickSavingId] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [selectedYearMonth, setSelectedYearMonth] = useState(initialYearMonth);
   const [generateYear, setGenerateYear] = useState(initialYearMonth.year);
+  const [paymentDraft, setPaymentDraft] = useState<PaymentDraft | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showHistoryFilter, setShowHistoryFilter] = useState(false);
 
   const [filterYear, setFilterYear] = useState('all');
   const [filterMonth, setFilterMonth] = useState('all');
@@ -161,19 +327,8 @@ export default function DepositsPage() {
       return;
     }
 
-    const nextMembers = (membersResult.data || []) as Member[];
-    setMembers(nextMembers);
+    setMembers(((membersResult.data || []) as Member[]).sort(sortMembers));
     setDeposits(normalizeDepositStatuses((depositsResult.data || []) as MonthlyDeposit[]));
-
-    if (!form.member_id && nextMembers.length > 0) {
-      const first = nextMembers[0];
-      setForm((current) => ({
-        ...current,
-        member_id: first.id,
-        required_amount: Number(first.monthly_amount),
-        due_date: safeDueDate(current.year, current.month, Number(first.payday))
-      }));
-    }
   }
 
   useEffect(() => {
@@ -190,105 +345,94 @@ export default function DepositsPage() {
     };
   }, []);
 
+  const selectedRows = useMemo<DepositRow[]>(() => {
+    return members.map((member) => {
+      const deposit = deposits.find((item) => item.member_id === member.id && item.year === selectedYearMonth.year && item.month === selectedYearMonth.month) || null;
+      const dueDate = deposit?.due_date || safeDueDate(selectedYearMonth.year, selectedYearMonth.month, Number(member.payday));
+      const requiredAmount = Number(deposit?.required_amount ?? member.monthly_amount);
+      const paidAmount = Number(deposit?.paid_amount || 0);
+      const actualTransferDate = deposit?.actual_transfer_date || null;
+      const status = getDepositStatus({
+        paidAmount,
+        requiredAmount,
+        actualTransferDate,
+        dueDate
+      });
+
+      return {
+        member,
+        deposit,
+        year: selectedYearMonth.year,
+        month: selectedYearMonth.month,
+        due_date: dueDate,
+        required_amount: requiredAmount,
+        actual_transfer_date: actualTransferDate,
+        paid_amount: paidAmount,
+        proof_image_url: deposit?.proof_image_url || null,
+        status
+      };
+    });
+  }, [members, deposits, selectedYearMonth]);
+
+  const monthSummary = useMemo(() => {
+    const target = selectedRows.reduce((sum, row) => sum + row.required_amount, 0);
+    const paid = selectedRows.reduce((sum, row) => sum + row.paid_amount, 0);
+    const remaining = Math.max(target - paid, 0);
+    const progress = target > 0 ? Math.min(Math.round((paid / target) * 100), 100) : 0;
+    const completeCount = selectedRows.filter((row) => row.paid_amount >= row.required_amount && row.required_amount > 0).length;
+    const status = paid <= 0 ? 'Belum Lengkap' : paid < target ? 'Belum Lengkap' : paid === target ? 'Lengkap' : 'Lebih';
+
+    return { target, paid, remaining, progress, completeCount, status };
+  }, [selectedRows]);
+
   const years = useMemo(() => {
-    const set = new Set<number>([2026, initialYearMonth.year, generateYear]);
+    const set = new Set<number>([2026, initialYearMonth.year, generateYear, selectedYearMonth.year]);
     deposits.forEach((deposit) => set.add(deposit.year));
     return Array.from(set).sort((a, b) => a - b);
-  }, [deposits, generateYear]);
+  }, [deposits, generateYear, selectedYearMonth.year]);
 
   const filteredDeposits = useMemo(() => {
     return deposits.filter((deposit) => {
-      const computedStatus = getComputedDepositStatus(deposit);
+      const status = getDepositStatus({
+        paidAmount: deposit.paid_amount,
+        requiredAmount: deposit.required_amount,
+        actualTransferDate: deposit.actual_transfer_date,
+        dueDate: deposit.due_date
+      });
+
       if (filterYear !== 'all' && deposit.year !== Number(filterYear)) return false;
       if (filterMonth !== 'all' && deposit.month !== Number(filterMonth)) return false;
       if (filterMember !== 'all' && deposit.member_id !== filterMember) return false;
-      if (filterStatus !== 'all' && computedStatus !== filterStatus) return false;
+      if (filterStatus !== 'all' && status !== filterStatus) return false;
       return true;
     });
   }, [deposits, filterYear, filterMonth, filterMember, filterStatus]);
 
-  const summary = useMemo(() => calculateFilteredDepositSummary(filteredDeposits), [filteredDeposits]);
-
-  const statusPreview = getDepositStatus({
-    paidAmount: form.paid_amount,
-    requiredAmount: form.required_amount,
-    actualTransferDate: form.actual_transfer_date || null,
-    dueDate: form.due_date
-  });
-
-  function patchFormByMember(memberId: string, year = form.year, month = form.month) {
-    const member = members.find((item) => item.id === memberId);
-    setForm((current) => ({
-      ...current,
-      member_id: memberId,
-      year,
-      month,
-      required_amount: member ? Number(member.monthly_amount) : current.required_amount,
-      due_date: member ? safeDueDate(year, month, Number(member.payday)) : current.due_date
-    }));
+  function changeMonth(diff: number) {
+    setSelectedYearMonth((current) => shiftMonth(current.year, current.month, diff));
   }
 
-  function patchFormYearMonth(year: number, month: number) {
-    const member = members.find((item) => item.id === form.member_id);
-    setForm((current) => ({
-      ...current,
-      year,
-      month,
-      due_date: member ? safeDueDate(year, month, Number(member.payday)) : current.due_date
-    }));
-  }
-
-  function resetForm() {
-    const first = members[0];
-    const base = { ...emptyForm, proofFile: null };
-    if (first) {
-      setForm({
-        ...base,
-        member_id: first.id,
-        required_amount: Number(first.monthly_amount),
-        due_date: safeDueDate(base.year, base.month, Number(first.payday))
-      });
-    } else {
-      setForm(base);
-    }
-    setEditing(null);
-  }
-
-  function resetFilters() {
+  function resetHistoryFilter() {
     setFilterYear('all');
     setFilterMonth('all');
     setFilterMember('all');
     setFilterStatus('all');
+    setShowHistoryFilter(false);
   }
 
-  function startEdit(deposit: MonthlyDeposit) {
-    setEditing(deposit);
-    setForm({
-      member_id: deposit.member_id,
-      year: deposit.year,
-      month: deposit.month,
-      due_date: deposit.due_date,
-      required_amount: Number(deposit.required_amount),
-      actual_transfer_date: deposit.actual_transfer_date || '',
-      paid_amount: Number(deposit.paid_amount || 0),
-      proofFile: null
+  function openPayment(row: DepositRow, mode: 'quick' | 'custom') {
+    setPaymentDraft({
+      member: row.member,
+      deposit: row.deposit,
+      year: row.year,
+      month: row.month,
+      due_date: row.due_date,
+      required_amount: row.required_amount,
+      actual_transfer_date: mode === 'quick' ? today : row.actual_transfer_date || today,
+      paid_amount: mode === 'quick' ? row.required_amount : row.paid_amount || row.required_amount,
+      proofFile: null,
+      mode
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  async function runConfirmAction() {
-    if (!confirmAction) return;
-
-    setConfirmLoading(true);
-    try {
-      await confirmAction.onConfirm();
-      setConfirmAction(null);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Terjadi error tidak diketahui.';
-      toast({ title: 'Aksi gagal', message, type: 'error' });
-    } finally {
-      setConfirmLoading(false);
-    }
   }
 
   function validateFile(file: File) {
@@ -315,120 +459,127 @@ export default function DepositsPage() {
     return path;
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const validationMessage = validateDepositForm(form);
-    if (validationMessage) {
-      toast({ title: 'Data setoran belum valid', message: validationMessage, type: 'error' });
-      return;
-    }
-
-    setSaving(true);
-    const status = getDepositStatus({
-      paidAmount: form.paid_amount,
-      requiredAmount: form.required_amount,
-      actualTransferDate: form.actual_transfer_date || null,
-      dueDate: form.due_date
-    });
+  async function persistPaymentDraft(draft: PaymentDraft) {
+    setSavingDraft(true);
 
     try {
+      const status = getDepositStatus({
+        paidAmount: draft.paid_amount,
+        requiredAmount: draft.required_amount,
+        actualTransferDate: draft.actual_transfer_date || null,
+        dueDate: draft.due_date
+      });
+
       const payload = {
-        member_id: form.member_id,
-        year: Number(form.year),
-        month: Number(form.month),
-        due_date: form.due_date,
-        required_amount: Number(form.required_amount),
-        actual_transfer_date: form.actual_transfer_date || null,
-        paid_amount: Number(form.paid_amount || 0),
+        member_id: draft.member.id,
+        year: draft.year,
+        month: draft.month,
+        due_date: draft.due_date,
+        required_amount: Number(draft.required_amount),
+        actual_transfer_date: Number(draft.paid_amount || 0) > 0 ? draft.actual_transfer_date : null,
+        paid_amount: Number(draft.paid_amount || 0),
         status
       };
 
-      if (editing) {
-        const { data: duplicateRows, error: duplicateError } = await supabase
-          .from('monthly_deposits')
-          .select('id')
-          .eq('member_id', payload.member_id)
-          .eq('year', payload.year)
-          .eq('month', payload.month)
-          .neq('id', editing.id);
+      const { data, error } = await supabase
+        .from('monthly_deposits')
+        .upsert(payload, { onConflict: 'member_id,year,month' })
+        .select()
+        .single();
 
-        if (duplicateError) throw duplicateError;
-        if ((duplicateRows || []).length > 0) {
-          toast({
-            title: 'Periode sudah ada',
-            message: 'Tidak bisa memindahkan setoran ini karena anggota + bulan + tahun tersebut sudah punya data.',
-            type: 'error'
-          });
-          return;
-        }
-        let proofPath = editing.proof_image_url;
-        if (form.proofFile) proofPath = await uploadProof(form.proofFile, editing.id, editing.proof_image_url);
-        const { error } = await supabase.from('monthly_deposits').update({ ...payload, proof_image_url: proofPath }).eq('id', editing.id);
-        if (error) throw error;
-        toast({ title: 'Setoran berhasil diupdate', type: 'success' });
-      } else {
-        const { data, error } = await supabase
-          .from('monthly_deposits')
-          .upsert(payload, { onConflict: 'member_id,year,month' })
-          .select()
-          .single();
-        if (error) throw error;
+      if (error) throw error;
 
-        if (form.proofFile && data?.id) {
-          const proofPath = await uploadProof(form.proofFile, data.id, data.proof_image_url);
-          const { error: updateError } = await supabase.from('monthly_deposits').update({ proof_image_url: proofPath }).eq('id', data.id);
-          if (updateError) throw updateError;
-        }
-        toast({ title: 'Setoran berhasil disimpan', message: 'Kalau periode sudah ada, datanya otomatis diupdate.', type: 'success' });
+      if (draft.proofFile && data?.id) {
+        const proofPath = await uploadProof(draft.proofFile, data.id, data.proof_image_url);
+        const { error: updateError } = await supabase.from('monthly_deposits').update({ proof_image_url: proofPath }).eq('id', data.id);
+        if (updateError) throw updateError;
       }
 
-      resetForm();
+      toast({
+        title: draft.mode === 'quick' ? 'Setoran ditandai lunas' : 'Setoran berhasil disimpan',
+        message: `${draft.member.name} ${monthLabel(draft.year, draft.month)} berhasil diupdate.`,
+        type: 'success'
+      });
+      setPaymentDraft(null);
       fetchData(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Terjadi error tidak diketahui.';
-      toast({ title: editing ? 'Gagal update setoran' : 'Gagal tambah setoran', message, type: 'error' });
+      toast({ title: 'Gagal simpan setoran', message, type: 'error' });
     } finally {
-      setSaving(false);
+      setSavingDraft(false);
     }
   }
 
-  async function quickMarkPaid(deposit: MonthlyDeposit) {
-    setQuickSavingId(deposit.id);
-    const status = getDepositStatus({
-      paidAmount: deposit.required_amount,
-      requiredAmount: deposit.required_amount,
-      actualTransferDate: today,
-      dueDate: deposit.due_date
-    });
-
-    const { error } = await supabase
-      .from('monthly_deposits')
-      .update({
-        paid_amount: Number(deposit.required_amount),
-        actual_transfer_date: today,
-        status
-      })
-      .eq('id', deposit.id);
-    setQuickSavingId(null);
-
-    if (error) {
-      toast({ title: 'Gagal lunaskan setoran', message: error.message, type: 'error' });
+  async function savePaymentDraft() {
+    const validationMessage = validatePaymentDraft(paymentDraft);
+    if (validationMessage || !paymentDraft) {
+      toast({ title: 'Data setoran belum valid', message: validationMessage || 'Data setoran belum dipilih.', type: 'error' });
       return;
     }
 
-    toast({ title: 'Setoran ditandai lunas', message: `${deposit.members?.name || 'Anggota'} ${monthLabel(deposit.year, deposit.month)} sudah lunas.`, type: 'success' });
-    fetchData(false);
+    const draft = paymentDraft;
+    const warnings = getPaymentDraftWarnings(draft);
+
+    if (warnings.length > 0) {
+      setConfirmAction({
+        title: 'Cek ulang setoran?',
+        description: warnings.join(' '),
+        confirmLabel: 'Tetap simpan',
+        tone: 'primary',
+        onConfirm: () => persistPaymentDraft(draft)
+      });
+      return;
+    }
+
+    await persistPaymentDraft(draft);
   }
 
-  function deleteDeposit(deposit: MonthlyDeposit) {
+  function resetPayment(row: DepositRow) {
+    if (!row.deposit) return;
+
+    setConfirmAction({
+      title: 'Reset setoran?',
+      description: `Setoran ${row.member.name} ${monthLabel(row.year, row.month)} akan dikosongkan lagi. Nominal masuk, tanggal transfer, dan foto bukti akan dihapus.`,
+      confirmLabel: 'Ya, reset',
+      tone: 'danger',
+      onConfirm: async () => {
+        if (row.proof_image_url && !row.proof_image_url.startsWith('http')) {
+          const { error: storageError } = await supabase.storage.from('transfer-proofs').remove([row.proof_image_url]);
+          if (storageError) throw storageError;
+        }
+
+        const { error } = await supabase
+          .from('monthly_deposits')
+          .update({
+            actual_transfer_date: null,
+            paid_amount: 0,
+            proof_image_url: null,
+            status: 'Belum Dibayar'
+          })
+          .eq('id', row.deposit.id);
+
+        if (error) throw error;
+        toast({ title: 'Setoran berhasil direset', type: 'success' });
+        fetchData(false);
+      }
+    });
+  }
+
+  function deleteDeposit(row: DepositRow | MonthlyDeposit) {
+    const deposit = 'deposit' in row ? row.deposit : row;
+    const memberName = 'member' in row ? row.member.name : row.members?.name || 'Anggota';
+    const year = 'year' in row ? row.year : row.year;
+    const month = 'month' in row ? row.month : row.month;
+
+    if (!deposit) return;
+
     const hasPayment = Number(deposit.paid_amount || 0) > 0;
     const hasProof = Boolean(deposit.proof_image_url);
 
     setConfirmAction({
       title: 'Hapus setoran?',
-      description: `Setoran ${deposit.members?.name || 'Anggota'} ${monthLabel(deposit.year, deposit.month)} akan dihapus permanen.${hasPayment ? ' Nominal masuk yang sudah tercatat juga ikut hilang.' : ''}${hasProof ? ' Foto bukti TF juga akan dihapus dari Storage.' : ''}`,
-      confirmLabel: 'Ya, hapus setoran',
+      description: `Setoran ${memberName} ${monthLabel(year, month)} akan dihapus permanen.${hasPayment ? ' Nominal masuk yang sudah tercatat juga ikut hilang.' : ''}${hasProof ? ' Foto bukti TF juga akan dihapus dari Storage.' : ''}`,
+      confirmLabel: 'Ya, hapus',
       tone: 'danger',
       onConfirm: async () => {
         if (deposit.proof_image_url && !deposit.proof_image_url.startsWith('http')) {
@@ -445,7 +596,7 @@ export default function DepositsPage() {
     });
   }
 
-  async function runGenerate(rowsType: '24-months' | 'year' | 'current-month') {
+  async function runGenerate(rowsType: '24-months' | 'year' | 'selected-month') {
     if (members.length === 0) {
       toast({ title: 'Belum ada anggota', message: 'Jalankan SQL seed dulu supaya Kakak dan Mpip ada.', type: 'error' });
       return;
@@ -453,13 +604,34 @@ export default function DepositsPage() {
 
     let rows = buildMonthlyDepositRows(members, 2026, 6, 24);
     if (rowsType === 'year') rows = buildMonthlyDepositRows(members, generateYear, 1, 12);
-    if (rowsType === 'current-month') rows = buildMonthlyDepositRows(members, initialYearMonth.year, initialYearMonth.month, 1);
+    if (rowsType === 'selected-month') rows = buildMonthlyDepositRows(members, selectedYearMonth.year, selectedYearMonth.month, 1);
+
+    const memberIds = members.map((member) => member.id);
+    const rowYears = Array.from(new Set(rows.map((row) => row.year)));
 
     setGenerating(true);
-    const { error } = await supabase.from('monthly_deposits').upsert(rows, {
-      onConflict: 'member_id,year,month',
-      ignoreDuplicates: true
-    });
+    const { data: existingRows, error: existingError } = await supabase
+      .from('monthly_deposits')
+      .select('member_id, year, month')
+      .in('member_id', memberIds)
+      .in('year', rowYears);
+
+    if (existingError) {
+      setGenerating(false);
+      toast({ title: 'Generate setoran gagal', message: existingError.message, type: 'error' });
+      return;
+    }
+
+    const existingKeys = new Set((existingRows || []).map((row) => `${row.member_id}-${row.year}-${row.month}`));
+    const rowsToInsert = rows.filter((row) => !existingKeys.has(`${row.member_id}-${row.year}-${row.month}`));
+
+    if (rowsToInsert.length === 0) {
+      setGenerating(false);
+      toast({ title: 'Tidak ada data baru', message: 'Semua setoran periode ini sudah ada, jadi tidak ada yang diubah.', type: 'info' });
+      return;
+    }
+
+    const { error } = await supabase.from('monthly_deposits').insert(rowsToInsert);
     setGenerating(false);
 
     if (error) {
@@ -467,11 +639,15 @@ export default function DepositsPage() {
       return;
     }
 
-    toast({ title: 'Generate setoran selesai', message: 'Periode yang sudah ada otomatis dilewati.', type: 'success' });
+    toast({
+      title: 'Generate setoran selesai',
+      message: `${rowsToInsert.length} data baru dibuat. Data yang sudah ada tidak disentuh.`,
+      type: 'success'
+    });
     fetchData(false);
   }
 
-  function generate(rowsType: '24-months' | 'year' | 'current-month') {
+  function generate(rowsType: '24-months' | 'year' | 'selected-month') {
     if (rowsType === 'year' && (!Number.isInteger(Number(generateYear)) || Number(generateYear) < 2026 || Number(generateYear) > 2100)) {
       toast({ title: 'Tahun generate belum valid', message: 'Isi tahun antara 2026 sampai 2100.', type: 'error' });
       return;
@@ -482,7 +658,7 @@ export default function DepositsPage() {
         ? '24 bulan mulai Juni 2026'
         : rowsType === 'year'
           ? `tahun ${generateYear}`
-          : 'bulan berjalan';
+          : monthLabel(selectedYearMonth.year, selectedYearMonth.month);
 
     setConfirmAction({
       title: 'Generate setoran?',
@@ -493,285 +669,284 @@ export default function DepositsPage() {
     });
   }
 
+  async function runConfirmAction() {
+    if (!confirmAction) return;
+
+    setConfirmLoading(true);
+    try {
+      await confirmAction.onConfirm();
+      setConfirmAction(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Terjadi error tidak diketahui.';
+      toast({ title: 'Aksi gagal', message, type: 'error' });
+    } finally {
+      setConfirmLoading(false);
+    }
+  }
+
   if (loading) return <LoadingState />;
 
   return (
     <main>
       <PageHeader
-        title="Setoran Bulanan"
-        description="Kelola setoran wajib bulanan, tanggal transfer aktual, nominal masuk, status pembayaran, dan foto bukti transfer. Di HP tampil card biar lebih enak."
+        title="Setoran"
+        description="Input dibuat cepat: pilih bulan, klik Setor Lunas atau Custom di card Kakak/Mpip."
       />
 
-      <div className="grid gap-5 xl:grid-cols-[440px_1fr]">
-        <div className="space-y-5">
-          <Card>
-            <h2 className="text-lg font-black text-stone-900">Generate Setoran</h2>
-            <p className="mt-2 text-sm font-semibold text-stone-500">Generate aman dijalankan berkali-kali. Periode yang sudah ada tidak akan dibuat duplicate.</p>
-            <div className="mt-5 space-y-3">
-              <Button type="button" className="w-full" onClick={() => generate('24-months')} disabled={generating}>
-                {generating ? 'Generate...' : 'Generate 24 bulan dari Juni 2026'}
-              </Button>
-              <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-                <input className="form-input" type="number" value={generateYear} onChange={(event) => setGenerateYear(Number(event.target.value))} />
-                <Button type="button" variant="secondary" onClick={() => generate('year')} disabled={generating}>
-                  Generate Tahun
+      <Card className="overflow-hidden !bg-[#4267d6] text-white">
+        <div className="flex items-center justify-between gap-3">
+          <Button type="button" variant="secondary" onClick={() => changeMonth(-1)} className="h-11 w-11 rounded-full p-0">
+            ‹
+          </Button>
+          <div className="text-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">Periode</p>
+            <p className="mt-1 text-2xl font-bold">{monthLabel(selectedYearMonth.year, selectedYearMonth.month)}</p>
+          </div>
+          <Button type="button" variant="secondary" onClick={() => changeMonth(1)} className="h-11 w-11 rounded-full p-0">
+            ›
+          </Button>
+        </div>
+
+        <div className="mt-6 rounded-[24px] bg-white/12 p-4">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-white/75">Masuk bulan ini</p>
+              <p className="mt-1 text-3xl font-bold">{rupiah(monthSummary.paid)}</p>
+              <p className="mt-1 text-xs font-medium text-white/70">Target {rupiah(monthSummary.target)} • Sisa {rupiah(monthSummary.remaining)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-3xl font-bold">{monthSummary.progress}%</p>
+              <p className="text-xs font-medium text-white/70">{monthSummary.status}</p>
+            </div>
+          </div>
+          <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/20">
+            <div className="h-full rounded-full bg-white" style={{ width: `${monthSummary.progress}%` }} />
+          </div>
+        </div>
+      </Card>
+
+      <section className="grid gap-4 md:grid-cols-2">
+        {selectedRows.length === 0 ? (
+          <EmptyState title="Anggota belum ada" description="Jalankan SQL seed supaya data Kakak dan Mpip dibuat." />
+        ) : (
+          selectedRows.map((row) => (
+            <PaymentCard
+              key={row.member.id}
+              row={row}
+              saving={savingDraft}
+              onQuick={(nextRow) => openPayment(nextRow, 'quick')}
+              onCustom={(nextRow) => openPayment(nextRow, 'custom')}
+              onReset={resetPayment}
+              onDelete={deleteDeposit}
+              onPreview={setPreviewUrl}
+            />
+          ))
+        )}
+      </section>
+
+      <Card>
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-3 text-left"
+          onClick={() => setShowAdvanced((value) => !value)}
+        >
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Advanced / Riwayat</h2>
+            <p className="mt-1 text-sm font-medium text-slate-500">Generate, filter, edit, reset, atau hapus data lama.</p>
+          </div>
+          <span className="rounded-2xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-600">{showAdvanced ? 'Tutup' : 'Buka'}</span>
+        </button>
+
+        {showAdvanced ? (
+          <div className="mt-5 space-y-5">
+            <div className="rounded-[24px] bg-slate-50 p-4">
+              <h3 className="font-bold text-slate-900">Generate data</h3>
+              <p className="mt-1 text-sm font-medium text-slate-500">Aman dijalankan berkali-kali. Data existing tidak duplicate.</p>
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                <Button type="button" onClick={() => generate('selected-month')} disabled={generating}>
+                  Generate bulan ini
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => generate('24-months')} disabled={generating}>
+                  Generate 24 bulan
+                </Button>
+                <div className="grid grid-cols-[1fr_auto] gap-2">
+                  <input className="form-input" type="number" value={generateYear} onChange={(event) => setGenerateYear(Number(event.target.value))} />
+                  <Button type="button" variant="secondary" onClick={() => generate('year')} disabled={generating}>
+                    Tahun
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h3 className="font-bold text-slate-900">Riwayat setoran</h3>
+                <Button type="button" variant="secondary" onClick={() => setShowHistoryFilter((value) => !value)}>
+                  Filter
                 </Button>
               </div>
-              <Button type="button" className="w-full" variant="secondary" onClick={() => generate('current-month')} disabled={generating}>
-                Generate Bulan Berjalan
-              </Button>
-            </div>
-          </Card>
 
-          <Card>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-black text-stone-900">{editing ? 'Edit Setoran' : 'Input Setoran'}</h2>
-                <p className="mt-1 text-sm font-semibold text-stone-500">Periode yang sudah ada akan otomatis diupdate.</p>
-              </div>
-              <span className={`badge ${statusBadgeClass(statusPreview)}`}>{statusPreview}</span>
-            </div>
-
-            <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
-              <div>
-                <label className="form-label">Nama anggota</label>
-                <select className="form-input mt-2" value={form.member_id} onChange={(event) => patchFormByMember(event.target.value)}>
-                  <option value="">Pilih anggota</option>
+              <div className={`${showHistoryFilter ? 'grid' : 'hidden'} mb-4 gap-3 md:grid-cols-5`}>
+                <select className="form-input" value={filterYear} onChange={(event) => setFilterYear(event.target.value)}>
+                  <option value="all">Semua tahun</option>
+                  {years.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+                <select className="form-input" value={filterMonth} onChange={(event) => setFilterMonth(event.target.value)}>
+                  <option value="all">Semua bulan</option>
+                  {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
+                    <option key={month} value={month}>
+                      {month}
+                    </option>
+                  ))}
+                </select>
+                <select className="form-input" value={filterMember} onChange={(event) => setFilterMember(event.target.value)}>
+                  <option value="all">Semua anggota</option>
                   {members.map((member) => (
                     <option key={member.id} value={member.id}>
                       {member.name}
                     </option>
                   ))}
                 </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="form-label">Tahun</label>
-                  <input className="form-input mt-2" type="number" value={form.year} onChange={(event) => patchFormYearMonth(Number(event.target.value), form.month)} />
-                </div>
-                <div>
-                  <label className="form-label">Bulan</label>
-                  <select className="form-input mt-2" value={form.month} onChange={(event) => patchFormYearMonth(form.year, Number(event.target.value))}>
-                    {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
-                      <option key={month} value={month}>
-                        {month}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="form-label">Tanggal jatuh tempo</label>
-                <input className="form-input mt-2" type="date" value={form.due_date} onChange={(event) => setForm({ ...form, due_date: event.target.value })} />
-              </div>
-              <div>
-                <label className="form-label">Nominal wajib</label>
-                <input className="form-input mt-2" type="number" value={form.required_amount} onChange={(event) => setForm({ ...form, required_amount: Number(event.target.value) })} min={0} />
-                <p className="mt-1 text-xs font-bold text-stone-400">Preview: {rupiah(form.required_amount)}</p>
-              </div>
-              <div>
-                <label className="form-label">Tanggal transfer aktual</label>
-                <input className="form-input mt-2" type="date" value={form.actual_transfer_date} onChange={(event) => setForm({ ...form, actual_transfer_date: event.target.value })} />
-              </div>
-              <div>
-                <label className="form-label">Nominal masuk</label>
-                <input className="form-input mt-2" type="number" value={form.paid_amount} onChange={(event) => setForm({ ...form, paid_amount: Number(event.target.value) })} min={0} />
-                <p className="mt-1 text-xs font-bold text-stone-400">Preview: {rupiah(form.paid_amount)}</p>
-              </div>
-              <div>
-                <label className="form-label">Foto bukti TF</label>
-                <input className="form-input mt-2" type="file" accept="image/*" onChange={(event: ChangeEvent<HTMLInputElement>) => setForm({ ...form, proofFile: event.target.files?.[0] || null })} />
-                <p className="mt-1 text-xs font-bold text-stone-400">Format gambar, maksimal 5MB. {editing?.proof_image_url ? 'Kosongkan kalau tidak mau ganti foto.' : ''}</p>
-              </div>
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <Button type="submit" disabled={saving} className="w-full sm:w-auto">
-                  {saving ? 'Menyimpan...' : editing ? 'Update setoran' : 'Simpan setoran'}
+                <select className="form-input" value={filterStatus} onChange={(event) => setFilterStatus(event.target.value as DepositStatus | 'all')}>
+                  <option value="all">Semua status</option>
+                  <option value="Belum Dibayar">Belum Dibayar</option>
+                  <option value="Kurang">Kurang</option>
+                  <option value="Terbayar">Terbayar</option>
+                  <option value="Terbayar Telat">Terbayar Telat</option>
+                </select>
+                <Button type="button" variant="secondary" onClick={resetHistoryFilter}>
+                  Reset
                 </Button>
-                {editing ? (
-                  <Button type="button" variant="secondary" onClick={resetForm} className="w-full sm:w-auto">
-                    Batal
-                  </Button>
-                ) : null}
-              </div>
-            </form>
-          </Card>
-        </div>
-
-        <Card>
-          <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <MiniSummaryCard label="Total wajib" value={rupiah(summary.required)} helper={`${summary.count} baris`} />
-            <MiniSummaryCard label="Sudah masuk" value={rupiah(summary.paid)} />
-            <MiniSummaryCard label="Sisa kurang" value={rupiah(summary.remaining)} />
-            <MiniSummaryCard label="Perlu dicek" value={`${summary.problemCount}`} helper={`${summary.lateCount} telat`} />
-          </div>
-
-          <div className="mb-5 grid gap-3 md:grid-cols-5">
-            <select className="form-input" value={filterYear} onChange={(event) => setFilterYear(event.target.value)}>
-              <option value="all">Semua tahun</option>
-              {years.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
-            <select className="form-input" value={filterMonth} onChange={(event) => setFilterMonth(event.target.value)}>
-              <option value="all">Semua bulan</option>
-              {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
-                <option key={month} value={month}>
-                  {month}
-                </option>
-              ))}
-            </select>
-            <select className="form-input" value={filterMember} onChange={(event) => setFilterMember(event.target.value)}>
-              <option value="all">Semua anggota</option>
-              {members.map((member) => (
-                <option key={member.id} value={member.id}>
-                  {member.name}
-                </option>
-              ))}
-            </select>
-            <select className="form-input" value={filterStatus} onChange={(event) => setFilterStatus(event.target.value as DepositStatus | 'all')}>
-              <option value="all">Semua status</option>
-              <option value="Belum Dibayar">Belum Dibayar</option>
-              <option value="Kurang">Kurang</option>
-              <option value="Terbayar">Terbayar</option>
-              <option value="Terbayar Telat">Terbayar Telat</option>
-            </select>
-            <Button type="button" variant="secondary" onClick={resetFilters}>
-              Reset filter
-            </Button>
-          </div>
-
-          {filteredDeposits.length === 0 ? (
-            <EmptyState title="Belum ada setoran" description="Generate data awal atau tambah setoran manual dulu." />
-          ) : (
-            <>
-              <div className="grid gap-3 md:hidden">
-                {filteredDeposits.map((deposit) => {
-                  const computedStatus = getComputedDepositStatus(deposit);
-                  const progress = depositProgress(deposit);
-                  const remaining = depositRemaining(deposit);
-                  const overdue = isDepositOverdue(deposit);
-
-                  return (
-                    <div key={deposit.id} className="mobile-data-card">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-base font-black text-stone-900">{monthLabel(deposit.year, deposit.month)}</p>
-                          <span className="mt-2 badge text-stone-700" style={{ backgroundColor: deposit.members?.color || '#f5f5f4' }}>
-                            {deposit.members?.name || '-'}
-                          </span>
-                        </div>
-                        <span className={`badge ${statusBadgeClass(computedStatus)}`}>{computedStatus}</span>
-                      </div>
-
-                      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                        <div className="rounded-2xl palette-card p-3">
-                          <p className="text-xs font-black uppercase text-stone-400">Wajib</p>
-                          <p className="font-black text-stone-900">{rupiah(deposit.required_amount)}</p>
-                        </div>
-                        <div className="rounded-2xl palette-card p-3">
-                          <p className="text-xs font-black uppercase text-stone-400">Masuk</p>
-                          <p className="font-black text-stone-900">{rupiah(deposit.paid_amount)}</p>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 h-3 overflow-hidden rounded-full bg-white">
-                        <div className="h-full rounded-full bg-gradient-to-r from-blush-300 to-skysoft-300" style={{ width: `${progress}%` }} />
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold text-stone-500">
-                        <span>Due {formatDate(deposit.due_date)}</span>
-                        <span>•</span>
-                        <span>TF {formatDate(deposit.actual_transfer_date)}</span>
-                        {remaining > 0 ? <span className="text-rose-600">• Kurang {rupiah(remaining)}</span> : null}
-                        {overdue ? <span className="text-amber-700">• Lewat jatuh tempo</span> : null}
-                      </div>
-
-                      <div className="mt-4 flex items-center justify-between gap-3">
-                        <ProofThumbnail path={deposit.proof_image_url} onPreview={setPreviewUrl} />
-                        <div className="flex flex-wrap justify-end gap-2">
-                          {remaining > 0 ? (
-                            <Button type="button" variant="success" onClick={() => quickMarkPaid(deposit)} disabled={quickSavingId === deposit.id}>
-                              Lunas
-                            </Button>
-                          ) : null}
-                          <Button type="button" variant="secondary" onClick={() => startEdit(deposit)}>
-                            Edit
-                          </Button>
-                          <Button type="button" variant="danger" onClick={() => deleteDeposit(deposit)}>
-                            Hapus
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
 
-              <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[1180px] overflow-hidden rounded-3xl bg-white/75">
-                  <thead className="bg-white/90">
-                    <tr>
-                      <th className="table-th">Bulan</th>
-                      <th className="table-th">Nama anggota</th>
-                      <th className="table-th">Jatuh tempo</th>
-                      <th className="table-th">Nominal wajib</th>
-                      <th className="table-th">Tanggal TF aktual</th>
-                      <th className="table-th">Nominal masuk</th>
-                      <th className="table-th">Foto bukti TF</th>
-                      <th className="table-th">Status</th>
-                      <th className="table-th">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white">
-                    {filteredDeposits.map((deposit) => {
-                      const computedStatus = getComputedDepositStatus(deposit);
-                      const remaining = depositRemaining(deposit);
+              {filteredDeposits.length === 0 ? (
+                <EmptyState title="Belum ada riwayat" description="Generate dulu atau catat setoran dari card bulan." />
+              ) : (
+                <div className="grid gap-3">
+                  {filteredDeposits.map((deposit) => {
+                    const member = deposit.members || members.find((item) => item.id === deposit.member_id) || null;
+                    const status = getDepositStatus({
+                      paidAmount: deposit.paid_amount,
+                      requiredAmount: deposit.required_amount,
+                      actualTransferDate: deposit.actual_transfer_date,
+                      dueDate: deposit.due_date
+                    });
+                    const remaining = depositRemaining(deposit);
+                    const row: DepositRow | null = member
+                      ? {
+                          member,
+                          deposit,
+                          year: deposit.year,
+                          month: deposit.month,
+                          due_date: deposit.due_date,
+                          required_amount: Number(deposit.required_amount),
+                          actual_transfer_date: deposit.actual_transfer_date,
+                          paid_amount: Number(deposit.paid_amount || 0),
+                          proof_image_url: deposit.proof_image_url,
+                          status
+                        }
+                      : null;
 
-                      return (
-                        <tr key={deposit.id} className={isDepositOverdue(deposit) ? 'bg-amber-50/70' : ''}>
-                          <td className="table-td font-black">{monthLabel(deposit.year, deposit.month)}</td>
-                          <td className="table-td">
-                            <span className="badge text-stone-700" style={{ backgroundColor: deposit.members?.color || '#f5f5f4' }}>
-                              {deposit.members?.name || '-'}
-                            </span>
-                          </td>
-                          <td className="table-td">{formatDate(deposit.due_date)}</td>
-                          <td className="table-td font-black">{rupiah(deposit.required_amount)}</td>
-                          <td className="table-td">{formatDate(deposit.actual_transfer_date)}</td>
-                          <td className="table-td font-black">{rupiah(deposit.paid_amount)}</td>
-                          <td className="table-td">
-                            <ProofThumbnail path={deposit.proof_image_url} onPreview={setPreviewUrl} />
-                          </td>
-                          <td className="table-td">
-                            <span className={`badge ${statusBadgeClass(computedStatus)}`}>{computedStatus}</span>
-                          </td>
-                          <td className="table-td">
-                            <div className="flex gap-2">
-                              {remaining > 0 ? (
-                                <Button type="button" variant="success" onClick={() => quickMarkPaid(deposit)} disabled={quickSavingId === deposit.id}>
-                                  Lunas
-                                </Button>
-                              ) : null}
-                              <Button type="button" variant="secondary" onClick={() => startEdit(deposit)}>
-                                Edit
-                              </Button>
-                              <Button type="button" variant="danger" onClick={() => deleteDeposit(deposit)}>
-                                Hapus
-                              </Button>
+                    return (
+                      <div key={deposit.id} className={`rounded-[24px] border border-slate-100 bg-white p-4 shadow-sm ${isDepositOverdue(deposit) ? 'ring-1 ring-amber-200' : ''}`}>
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className="font-bold text-slate-900">{monthLabel(deposit.year, deposit.month)}</p>
+                            <p className="mt-1 text-sm font-medium text-slate-500">{member?.name || '-'} • Due {formatDate(deposit.due_date)}</p>
+                          </div>
+                          <span className={`badge ${statusBadgeClass(status)}`}>{status}</span>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+                          <MiniSummaryCard label="Wajib" value={rupiah(deposit.required_amount)} />
+                          <MiniSummaryCard label="Masuk" value={rupiah(deposit.paid_amount)} />
+                          <MiniSummaryCard label="Sisa" value={rupiah(remaining)} />
+                          <div className="rounded-[22px] bg-white p-4 shadow-sm">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Bukti</p>
+                            <div className="mt-2">
+                              <ProofThumbnail path={deposit.proof_image_url} onPreview={setPreviewUrl} />
                             </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-        </Card>
-      </div>
+                          </div>
+                        </div>
 
+                        {row ? (
+                          <div className="mt-3 flex justify-end gap-2">
+                            <Button type="button" variant="secondary" onClick={() => openPayment(row, 'custom')}>
+                              Edit
+                            </Button>
+                            <Button type="button" variant="danger" onClick={() => deleteDeposit(deposit)}>
+                              Hapus
+                            </Button>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null}
+      </Card>
+
+      <Modal open={Boolean(paymentDraft)} title={paymentDraft ? `${paymentDraft.mode === 'quick' ? 'Setor Lunas' : 'Custom Setoran'} ${paymentDraft.member.name}` : 'Setoran'} onClose={() => (savingDraft ? undefined : setPaymentDraft(null))}>
+        {paymentDraft ? (
+          <div className="space-y-5">
+            <div className="rounded-[24px] bg-blue-50 p-4">
+              <p className="text-sm font-semibold text-[#3557bf]">{monthLabel(paymentDraft.year, paymentDraft.month)}</p>
+              <p className="mt-1 text-2xl font-bold text-slate-900">{rupiah(paymentDraft.required_amount)}</p>
+              <p className="mt-1 text-sm font-medium text-slate-500">Jatuh tempo {formatDate(paymentDraft.due_date)}</p>\n              <p className="mt-2 rounded-2xl bg-white px-3 py-2 text-xs font-semibold text-[#3557bf]">Bukti TF wajib untuk setoran yang nominal masuknya lebih dari 0.</p>
+            </div>
+
+            <div>
+              <label className="form-label">Tanggal transfer</label>
+              <input
+                className="form-input mt-2"
+                type="date"
+                value={paymentDraft.actual_transfer_date}
+                onChange={(event) => setPaymentDraft({ ...paymentDraft, actual_transfer_date: event.target.value })}
+              />
+            </div>
+
+            <div>
+              <label className="form-label">Nominal masuk</label>
+              <input
+                className="form-input mt-2"
+                type="number"
+                value={paymentDraft.paid_amount}
+                min={0}
+                onChange={(event) => setPaymentDraft({ ...paymentDraft, paid_amount: Number(event.target.value) })}
+              />
+              <p className="mt-1 text-xs font-semibold text-slate-400">Preview: {rupiah(paymentDraft.paid_amount)}</p>
+            </div>
+
+            <div>
+              <label className="form-label">Foto bukti TF</label>
+              <input
+                className="form-input mt-2"
+                type="file"
+                accept="image/*"
+                onChange={(event: ChangeEvent<HTMLInputElement>) => setPaymentDraft({ ...paymentDraft, proofFile: event.target.files?.[0] || null })}
+              />
+              <p className="mt-1 text-xs font-semibold text-slate-400">Wajib kalau nominal masuk lebih dari 0. Format gambar, maksimal 5MB.</p>
+              <LocalProofPreview file={paymentDraft.proofFile} />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Button type="button" variant="secondary" onClick={() => setPaymentDraft(null)} disabled={savingDraft}>
+                Batal
+              </Button>
+              <Button type="button" onClick={savePaymentDraft} disabled={savingDraft}>
+                {savingDraft ? 'Menyimpan...' : 'Simpan'}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
 
       <ConfirmDialog
         open={Boolean(confirmAction)}
