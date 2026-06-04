@@ -125,16 +125,16 @@ function ProofThumbnail({ path, onPreview }: { path: string | null; onPreview: (
 function PaymentCard({
   row,
   onQuick,
-  onIsiManual,
-  onBersihin,
+  onCustom,
+  onReset,
   onDelete,
   onPreview,
   saving
 }: {
   row: DepositRow;
   onQuick: (row: DepositRow) => void;
-  onIsiManual: (row: DepositRow) => void;
-  onBersihin: (row: DepositRow) => void;
+  onCustom: (row: DepositRow) => void;
+  onReset: (row: DepositRow) => void;
   onDelete: (row: DepositRow) => void;
   onPreview: (url: string) => void;
   saving: boolean;
@@ -181,17 +181,17 @@ function PaymentCard({
           <Button type="button" variant={remaining > 0 ? 'primary' : 'secondary'} className="w-full px-3" onClick={() => onQuick(row)} disabled={saving}>
             {remaining > 0 ? 'Transfer' : 'Bukti'}
           </Button>
-          <Button type="button" variant="secondary" onClick={() => onIsiManual(row)} disabled={saving}>
+          <Button type="button" variant="secondary" onClick={() => onCustom(row)} disabled={saving}>
             Isi manual
           </Button>
           <details className="action-menu">
             <summary>•••</summary>
             <div className="action-menu-panel space-y-2">
-              <Button type="button" variant="secondary" className="w-full" onClick={() => onIsiManual(row)}>
+              <Button type="button" variant="secondary" className="w-full" onClick={() => onCustom(row)}>
                 Edit
               </Button>
               {hasPayment || row.proof_image_url ? (
-                <Button type="button" variant="secondary" className="w-full" onClick={() => onBersihin(row)}>
+                <Button type="button" variant="secondary" className="w-full" onClick={() => onReset(row)}>
                   Bersihin
                 </Button>
               ) : null}
@@ -535,8 +535,8 @@ export default function DepositsPage() {
   }
 
   function resetPayment(row: DepositRow) {
+    if (!row.deposit) return;
     const deposit = row.deposit;
-    if (!deposit) return;
 
     setConfirmAction({
       title: 'Bersihin setoran?',
@@ -708,7 +708,7 @@ export default function DepositsPage() {
           </Button>
         </div>
 
-        <div className="mt-4 rounded-[22px] bg-white/12 p-4 md:mt-6 md:rounded-[24px]">
+        <div className="mt-4 rounded-[22px] bg-white/10 p-4 md:mt-6 md:rounded-[24px]">
           <div className="flex items-end justify-between gap-3">
             <div>
               <p className="text-sm font-medium text-white/75">Terkumpul bulan ini</p>
@@ -736,8 +736,8 @@ export default function DepositsPage() {
               row={row}
               saving={savingDraft}
               onQuick={(nextRow) => openPayment(nextRow, 'quick')}
-              onIsiManual={(nextRow) => openPayment(nextRow, 'custom')}
-              onBersihin={resetPayment}
+              onCustom={(nextRow) => openPayment(nextRow, 'custom')}
+              onReset={resetPayment}
               onDelete={deleteDeposit}
               onPreview={setPreviewUrl}
             />

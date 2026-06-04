@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase/client';
 import type { Member, MonthlyDeposit, OtherMutation } from '@/lib/types';
 import { calculateCurrentMonthStats, calculateMemberMonthStats, calculateTotals } from '@/lib/calculations';
 import { formatDate, monthLabel, rupiah } from '@/lib/format';
-import { normalizeDepositStatus, statusBadgeClass } from '@/lib/depositStatus';
+import { normalizeDepositStatuses, statusBadgeClass } from '@/lib/depositStatus';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -51,7 +51,7 @@ export default function DashboardPage() {
     }
 
     setMembers((membersResult.data || []) as Member[]);
-    setDeposits(((depositsResult.data || []) as MonthlyDeposit[]).map((deposit) => normalizeDepositStatus(deposit)));
+    setDeposits(normalizeDepositStatuses((depositsResult.data || []) as MonthlyDeposit[]));
     setMutations((mutationsResult.data || []) as OtherMutation[]);
   }
 
@@ -83,7 +83,7 @@ export default function DashboardPage() {
     <main>
       <PageHeader
         title="Rumah Tabungan Kita"
-        description="Tempat kecil buat lihat usaha Kakak dan Mpip ngumpulin masa depan bareng."
+        description="Tempat kecil buat lihat usaha kita ngumpulin masa depan bareng."
       />
 
       {members.length === 0 ? (
@@ -100,7 +100,7 @@ export default function DashboardPage() {
                 </p>
                 <h2 className="mt-4 text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">{rupiah(totals.balance)}</h2>
                 <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-stone-500">
-                  Saldo dihitung dari semua setoran masuk + mutasi tambah - penarikan. Cocok buat dipantau berdua dari link yang sama.
+                  Saldo dihitung dari semua setoran masuk + mutasi tambah - penarikan.
                 </p>
                 <div className="mt-6 grid grid-cols-2 gap-3">
                   <Link href="/deposits">

@@ -24,8 +24,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               <p className="mt-1 text-xl font-bold leading-tight md:text-2xl">Kakak sayang Mpip</p>
               <p className="mt-1 hidden text-sm font-medium text-white/80 sm:block">Biar mimpi kecil kita pelan-pelan jadi nyata.</p>
             </div>
-            <Link href="/members" className="rounded-2xl bg-white/18 px-3 py-2 text-sm font-semibold text-white backdrop-blur hover:bg-white/24">
-              Atur Cinta
+            <Link href="/members" className="rounded-2xl bg-white/20 px-3 py-2 text-sm font-semibold text-white backdrop-blur hover:bg-white/25">
+              <span className="md:hidden">Atur</span>
+              <span className="hidden md:inline">Atur Cinta</span>
             </Link>
           </div>
 
@@ -37,7 +38,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   key={link.href}
                   href={link.href}
                   className={`rounded-2xl px-2 py-3 text-center text-xs font-semibold transition md:text-sm ${
-                    active ? 'bg-white text-[#3557bf]' : 'bg-white/16 text-white hover:bg-white/22'
+                    active ? 'bg-white text-[#3557bf]' : 'bg-white/20 text-white hover:bg-white/20'
                   }`}
                 >
                   <div className="text-base">{link.icon}</div>

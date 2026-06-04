@@ -16,7 +16,10 @@ html { scroll-behavior: smooth; }
 body {
   min-height: 100vh;
   overflow-x: hidden;
-  background: linear-gradient(180deg, #4a6fd8 0px, #5f84e8 220px, #eff3fb 220px, #eff3fb 100%);
+  background:
+    radial-gradient(circle at top left, rgba(66, 103, 214, 0.12), transparent 18rem),
+    radial-gradient(circle at top right, rgba(164, 187, 224, 0.16), transparent 18rem),
+    #eff3fb;
   color: var(--foreground);
 }
 input[type='date']::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.75; }
@@ -38,6 +41,7 @@ input[type='date']::-webkit-calendar-picker-indicator { cursor: pointer; opacity
   .app-soft { @apply rounded-[22px] bg-blue-50 text-slate-700; }
   .page-note { @apply text-xs font-medium text-slate-400; }
   .blue-hero { background: linear-gradient(135deg, #4c70dc 0%, #6f92f0 100%); }
+  .palette-card { @apply rounded-2xl bg-slate-50; }
 }
 
 

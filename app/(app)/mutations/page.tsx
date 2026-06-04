@@ -2,8 +2,9 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
-import type { MonthlyDeposit, OtherMutation as ImportedOtherMutation } from '@/lib/types';
+import type { MutationType, MonthlyDeposit, OtherMutation } from '@/lib/types';
 import { currentYearMonth, formatDate, monthLabel, rupiah, todayInput } from '@/lib/format';
+import { calculateMonthlyRecaps } from '@/lib/calculations';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -12,21 +13,17 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { useToast } from '@/components/ui/ToastProvider';
 
-type MutationType = 'Tambah rezeki' | 'Kepakai';
-
-type OtherMutation = Omit<ImportedOtherMutation, 'type'> & { type: MutationType };
-
 const emptyForm = {
   mutation_date: todayInput(),
-  type: 'Tambah rezeki' as MutationType,
+  type: 'Tambah' as MutationType,
   amount: 0,
   description: ''
 };
 
 function SummaryCard({ label, value, tone = 'neutral' }: { label: string; value: string; tone?: 'neutral' | 'green' | 'red' }) {
-  const toneClass = tone === 'green' ? 'text-stone-800' : tone === 'red' ? 'text-stone-800' : 'text-slate-900';
+  const toneClass = tone === 'green' ? 'text-[#3557bf]' : tone === 'red' ? 'text-[#b44967]' : 'text-slate-900';
   return (
-    <div className="rounded-[1.5rem] bg-white p-4 shadow-sm">
+    <div className="rounded-[22px] bg-white p-4 shadow-sm">
       <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{label}</p>
       <p className={`mt-1 text-xl font-bold ${toneClass}`}>{value}</p>
     </div>
@@ -47,45 +44,11 @@ function isValidDateText(value: string) {
   const [year, month, day] = value.split('-').map(Number);
   const date = new Date(year, month - 1, day);
 
-  return (
-    date.getFullYear() === year &&
-    date.getMonth() === month - 1 &&
-    date.getDate() === day
-  );
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
 }
 
-function calculateMonthlyRecaps(deposits: MonthlyDeposit[], mutations: OtherMutation[]) {
-  const buckets = new Map<string, { year: number; month: number; totalDeposits: number; additions: number; withdrawals: number }>();
-
-  function ensureBucket(year: number, month: number) {
-    const key = `${year}-${String(month).padStart(2, '0')}`;
-    if (!buckets.has(key)) {
-      buckets.set(key, { year, month, totalDeposits: 0, additions: 0, withdrawals: 0 });
-    }
-    return buckets.get(key)!;
-  }
-
-  deposits.forEach((deposit) => {
-    const bucket = ensureBucket(deposit.year, deposit.month);
-    bucket.totalDeposits += Number(deposit.paid_amount || 0);
-  });
-
-  mutations.forEach((mutation) => {
-    const date = new Date(`${mutation.mutation_date}T00:00:00`);
-    const bucket = ensureBucket(date.getFullYear(), date.getMonth() + 1);
-    const amount = Number(mutation.amount || 0);
-
-    if (mutation.type === 'Tambah rezeki') bucket.additions += amount;
-    if (mutation.type === 'Kepakai') bucket.withdrawals += amount;
-  });
-
-  const sortedBuckets = Array.from(buckets.values()).sort((a, b) => a.year - b.year || a.month - b.month);
-  let runningBalance = 0;
-
-  return sortedBuckets.map((bucket) => {
-    runningBalance += bucket.totalDeposits + bucket.additions - bucket.withdrawals;
-    return { year: bucket.year, month: bucket.month, endingBalance: runningBalance };
-  });
+function mutationLabel(type: MutationType | string) {
+  return type === 'Tambah' ? 'Tambah rezeki' : 'Kepakai';
 }
 
 export default function MutationsPage() {
@@ -114,7 +77,7 @@ export default function MutationsPage() {
     if (showLoading) setLoading(false);
 
     if (mutationsResult.error || depositsResult.error) {
-      toast({ title: 'Gagal ambil data', message: mutationsResult.error?.message || depositsResult.error?.message, type: 'error' });
+      toast({ title: 'Gagal ambil cerita uang', message: mutationsResult.error?.message || depositsResult.error?.message, type: 'error' });
       return;
     }
 
@@ -155,8 +118,8 @@ export default function MutationsPage() {
   }, [mutations, filterYear, filterMonth, filterType, search]);
 
   const summary = useMemo(() => {
-    const additions = filteredMutations.filter((item) => item.type === 'Tambah rezeki').reduce((sum, item) => sum + Number(item.amount || 0), 0);
-    const withdrawals = filteredMutations.filter((item) => item.type === 'Kepakai').reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const additions = filteredMutations.filter((item) => item.type === 'Tambah').reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const withdrawals = filteredMutations.filter((item) => item.type === 'Penarikan').reduce((sum, item) => sum + Number(item.amount || 0), 0);
     return {
       additions,
       withdrawals,
@@ -167,8 +130,8 @@ export default function MutationsPage() {
 
   const currentBalance = useMemo(() => {
     const depositsTotal = deposits.reduce((sum, deposit) => sum + Number(deposit.paid_amount || 0), 0);
-    const additions = mutations.filter((item) => item.type === 'Tambah rezeki').reduce((sum, item) => sum + Number(item.amount || 0), 0);
-    const withdrawals = mutations.filter((item) => item.type === 'Kepakai').reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const additions = mutations.filter((item) => item.type === 'Tambah').reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const withdrawals = mutations.filter((item) => item.type === 'Penarikan').reduce((sum, item) => sum + Number(item.amount || 0), 0);
     return depositsTotal + additions - withdrawals;
   }, [deposits, mutations]);
 
@@ -185,6 +148,13 @@ export default function MutationsPage() {
     } finally {
       setConfirmLoading(false);
     }
+  }
+
+  function openCreateForm() {
+    setEditing(null);
+    setForm(emptyForm);
+    setShowSimpleForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function resetForm() {
@@ -229,40 +199,40 @@ export default function MutationsPage() {
       return;
     }
 
-    if (!['Tambah rezeki', 'Kepakai'].includes(form.type)) {
-      toast({ title: 'Tipe cerita belum valid', message: 'Tipe harus Tambah rezeki atau Kepakai.', type: 'error' });
+    if (!['Tambah', 'Penarikan'].includes(form.type)) {
+      toast({ title: 'Tipe cerita belum valid', message: 'Pilih Tambah rezeki atau Kepakai dulu.', type: 'error' });
       return;
     }
 
     if (!Number.isFinite(amount) || amount <= 0) {
-      toast({ title: 'Nominalnya mutasi belum valid', message: 'Nominalnya wajib lebih dari 0.', type: 'error' });
+      toast({ title: 'Nominalnya belum valid', message: 'Nominal harus lebih dari 0 ya.', type: 'error' });
       return;
     }
 
     if (amount > 1_000_000_000) {
-      toast({ title: 'Nominalnya terlalu besar', message: 'Cek lagi nominalnya ya, maksimal 1 miliar per cerita.', type: 'error' });
+      toast({ title: 'Nominalnya kegedean', message: 'Cek lagi nominalnya ya, maksimal 1 miliar per cerita.', type: 'error' });
       return;
     }
 
     if (description.length > 160) {
-      toast({ title: 'Keterangan manis terlalu panjang', message: 'Maksimal 160 karakter biar tetap rapi.', type: 'error' });
+      toast({ title: 'Keterangannya kepanjangan', message: 'Maksimal 160 karakter biar tetap rapi.', type: 'error' });
       return;
     }
 
-    if (form.type === 'Kepakai' && description.length === 0) {
-      toast({ title: 'Keterangan manis wajib diisi', message: 'Kepakai wajib punya keterangan supaya jelas uangnya dipakai untuk apa.', type: 'error' });
+    if (form.type === 'Penarikan' && description.length === 0) {
+      toast({ title: 'Keterangan wajib diisi', message: 'Kalau uangnya kepakai, tulis buat apa ya biar sama-sama jelas.', type: 'error' });
       return;
     }
 
     const balanceWithoutCurrentMutation = (() => {
       const depositsTotal = deposits.reduce((sum, deposit) => sum + Number(deposit.paid_amount || 0), 0);
       const otherRows = mutations.filter((mutation) => mutation.id !== editing?.id);
-      const additions = otherRows.filter((item) => item.type === 'Tambah rezeki').reduce((sum, item) => sum + Number(item.amount || 0), 0);
-      const withdrawals = otherRows.filter((item) => item.type === 'Kepakai').reduce((sum, item) => sum + Number(item.amount || 0), 0);
+      const additions = otherRows.filter((item) => item.type === 'Tambah').reduce((sum, item) => sum + Number(item.amount || 0), 0);
+      const withdrawals = otherRows.filter((item) => item.type === 'Penarikan').reduce((sum, item) => sum + Number(item.amount || 0), 0);
       return depositsTotal + additions - withdrawals;
     })();
 
-    if (form.type === 'Kepakai' && amount > balanceWithoutCurrentMutation) {
+    if (form.type === 'Penarikan' && amount > balanceWithoutCurrentMutation) {
       toast({
         title: 'Saldo belum cukup',
         message: `Saldo tersedia ${rupiah(balanceWithoutCurrentMutation)}, uang yang kepakai nggak boleh lebih besar dari saldo.`,
@@ -320,7 +290,7 @@ export default function MutationsPage() {
   function deleteMutation(mutation: OtherMutation) {
     setConfirmAction({
       title: 'Hapus cerita ini?',
-      description: `Mutasi ${mutation.type} ${rupiah(mutation.amount)} tanggal ${formatDate(mutation.mutation_date)} akan dihapus permanen dan saldo rekap ikut berubah.`,
+      description: `Cerita ${mutationLabel(mutation.type)} ${rupiah(mutation.amount)} tanggal ${formatDate(mutation.mutation_date)} akan dihapus permanen dan saldo rekap ikut berubah.`,
       confirmLabel: 'Iya, hapus cerita',
       tone: 'danger',
       onConfirm: async () => {
@@ -342,14 +312,23 @@ export default function MutationsPage() {
         description="Catat tambahan rezeki atau uang yang kepakai, biar saldo kita tetap jujur dan jelas."
       />
 
+      <div className="mb-4 grid grid-cols-2 gap-3">
+        <Button type="button" onClick={showSimpleForm ? resetForm : openCreateForm} className="w-full">
+          {showSimpleForm ? 'Tutup form' : 'Tambah cerita'}
+        </Button>
+        <Button type="button" variant="secondary" onClick={() => setShowSimpleFilter((value) => !value)} className="w-full">
+          {showSimpleFilter ? 'Tutup filter' : 'Filter'}
+        </Button>
+      </div>
+
       <div className="grid gap-5 lg:grid-cols-[420px_1fr]">
         <Card className={`${showSimpleForm || editing ? 'block' : 'hidden'}`}>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">{editing ? 'Edit cerita' : 'Tambah rezeki cerita'}</h2>
+              <h2 className="text-lg font-bold text-slate-900">{editing ? 'Edit cerita' : 'Tambah cerita'}</h2>
               <p className="mt-1 text-sm font-semibold text-slate-500">Isi cerita uang yang masuk atau kepakai.</p>
             </div>
-            <span className={`badge ${form.type === 'Tambah rezeki' ? 'bg-emerald-100 text-stone-800' : 'bg-rose-100 text-stone-800'}`}>{form.type}</span>
+            <span className={`badge ${form.type === 'Tambah' ? 'bg-emerald-100 text-stone-800' : 'bg-rose-100 text-stone-800'}`}>{mutationLabel(form.type)}</span>
           </div>
 
           <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
@@ -362,15 +341,15 @@ export default function MutationsPage() {
               <div className="mt-2 grid grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => setForm({ ...form, type: 'Tambah rezeki' })}
-                  className={`rounded-2xl px-4 py-3 text-sm font-bold transition ${form.type === 'Tambah rezeki' ? 'bg-emerald-100 text-stone-800 ring-2 ring-emerald-200' : 'bg-white/90 text-slate-500'}`}
+                  onClick={() => setForm({ ...form, type: 'Tambah' })}
+                  className={`rounded-2xl px-4 py-3 text-sm font-bold transition ${form.type === 'Tambah' ? 'bg-emerald-100 text-stone-800 ring-2 ring-emerald-200' : 'bg-white/90 text-slate-500'}`}
                 >
                   Tambah rezeki
                 </button>
                 <button
                   type="button"
-                  onClick={() => setForm({ ...form, type: 'Kepakai' })}
-                  className={`rounded-2xl px-4 py-3 text-sm font-bold transition ${form.type === 'Kepakai' ? 'bg-rose-100 text-stone-800 ring-2 ring-rose-200' : 'bg-white/90 text-slate-500'}`}
+                  onClick={() => setForm({ ...form, type: 'Penarikan' })}
+                  className={`rounded-2xl px-4 py-3 text-sm font-bold transition ${form.type === 'Penarikan' ? 'bg-rose-100 text-stone-800 ring-2 ring-rose-200' : 'bg-white/90 text-slate-500'}`}
                 >
                   Kepakai
                 </button>
@@ -383,17 +362,15 @@ export default function MutationsPage() {
             </div>
             <div>
               <label className="form-label">Keterangan manis</label>
-              <textarea className="form-input mt-2 min-h-28" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Contoh: bonus, hadiah, ambil buat kebutuhan... Kepakai wajib ada keterangan." />
+              <textarea className="form-input mt-2 min-h-28" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Contoh: bonus, hadiah, dipakai buat kebutuhan kita... Kalau kepakai wajib kasih keterangan ya." />
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button type="submit" disabled={saving} className="w-full sm:w-auto">
                 {saving ? 'Lagi disimpan...' : editing ? 'Update cerita' : 'Simpan cerita'}
               </Button>
-              {editing ? (
-                <Button type="button" variant="secondary" onClick={resetForm} className="w-full sm:w-auto">
-                  Nanti dulu
-                </Button>
-              ) : null}
+              <Button type="button" variant="secondary" onClick={resetForm} className="w-full sm:w-auto">
+                Nanti dulu
+              </Button>
             </div>
           </form>
         </Card>
@@ -426,17 +403,22 @@ export default function MutationsPage() {
             </select>
             <select className="form-input" value={filterType} onChange={(event) => setFilterType(event.target.value)}>
               <option value="all">Semua tipe</option>
-              <option value="Tambah rezeki">Tambah rezeki</option>
-              <option value="Kepakai">Kepakai</option>
+              <option value="Tambah">Tambah rezeki</option>
+              <option value="Penarikan">Kepakai</option>
             </select>
             <input className="form-input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari cerita..." />
             <Button type="button" variant="secondary" onClick={resetFilters}>
-              Reset filter
+              Bersihin
             </Button>
           </div>
 
           {filteredMutations.length === 0 ? (
-            <EmptyState title="Belum ada cerita uang" description="Tambah rezekikan transaksi tambahan atau penarikan dulu." />
+            <div className="space-y-4">
+              <EmptyState title="Belum ada cerita uang" description="Klik Tambah cerita buat catat rezeki tambahan atau uang yang kepakai." />
+              <Button type="button" className="w-full" onClick={openCreateForm}>
+                Tambah cerita pertama
+              </Button>
+            </div>
           ) : (
             <>
               <div className="grid gap-3 md:hidden">
@@ -444,12 +426,12 @@ export default function MutationsPage() {
                   <div key={mutation.id} className="mobile-data-card">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <span className={`badge ${mutation.type === 'Tambah rezeki' ? 'bg-emerald-100 text-stone-800' : 'bg-rose-100 text-stone-800'}`}>{mutation.type}</span>
+                        <span className={`badge ${mutation.type === 'Tambah' ? 'bg-emerald-100 text-stone-800' : 'bg-rose-100 text-stone-800'}`}>{mutationLabel(mutation.type)}</span>
                         <p className="mt-3 text-2xl font-bold text-slate-900">{rupiah(mutation.amount)}</p>
                       </div>
                       <p className="text-xs font-bold text-slate-400">{formatDate(mutation.mutation_date)}</p>
                     </div>
-                    <p className="mt-3 rounded-2xl palette-card p-3 text-sm font-semibold text-stone-600">{mutation.description || '-'}</p>
+                    <p className="mt-3 rounded-2xl bg-slate-50 p-3 text-sm font-semibold text-stone-600">{mutation.description || '-'}</p>
                     <div className="mt-4 flex justify-end">
                       <details className="action-menu">
                         <summary>Action</summary>
@@ -473,19 +455,17 @@ export default function MutationsPage() {
                     <tr>
                       <th className="table-th">Tanggal</th>
                       <th className="table-th">Tipe</th>
-                      <th className="table-th">Nominalnya</th>
-                      <th className="table-th">Keterangan manis</th>
+                      <th className="table-th">Nominal</th>
+                      <th className="table-th">Keterangan</th>
                       <th className="table-th">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white">
                     {filteredMutations.map((mutation) => (
                       <tr key={mutation.id}>
-                        <td className="table-td font-bold">{formatDate(mutation.mutation_date)}</td>
+                        <td className="table-td">{formatDate(mutation.mutation_date)}</td>
                         <td className="table-td">
-                          <span className={`badge ${mutation.type === 'Tambah rezeki' ? 'bg-emerald-100 text-stone-800' : 'bg-rose-100 text-stone-800'}`}>
-                            {mutation.type}
-                          </span>
+                          <span className={`badge ${mutation.type === 'Tambah' ? 'bg-emerald-100 text-stone-800' : 'bg-rose-100 text-stone-800'}`}>{mutationLabel(mutation.type)}</span>
                         </td>
                         <td className="table-td font-bold">{rupiah(mutation.amount)}</td>
                         <td className="table-td max-w-xs truncate">{mutation.description || '-'}</td>
@@ -519,7 +499,6 @@ export default function MutationsPage() {
         onClose={() => (confirmLoading ? undefined : setConfirmAction(null))}
         onConfirm={runConfirmAction}
       />
-
     </main>
   );
 }
