@@ -6,11 +6,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { AppIcon } from '@/components/ui/AppIcon';
+import { CapsuleDueOverlay } from '@/components/capsules/CapsuleDueOverlay';
 
 const links = [
   { href: '/dashboard', label: 'Beranda', icon: 'home' as const },
   { href: '/deposits', label: 'Setoran', icon: 'wallet' as const },
   { href: '/mutations', label: 'Cerita', icon: 'heart' as const },
+  { href: '/capsules', label: 'Kapsul', icon: 'gift' as const },
   { href: '/recap', label: 'Laporan', icon: 'chart' as const }
 ];
 
@@ -65,7 +67,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </div>
 
-          <nav className="mt-4 hidden grid-cols-4 gap-2 md:grid" aria-label="Navigasi utama">
+          <nav className="mt-4 hidden grid-cols-5 gap-2 md:grid" aria-label="Navigasi utama">
             {links.map((link) => {
               const active = pathname === link.href;
               return (
@@ -81,7 +83,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div key={pathname} className="page-enter space-y-5">{children}</div>
       </div>
 
-      <nav className="bottom-safe-area fixed inset-x-3 bottom-3 z-40 grid grid-cols-4 gap-1 rounded-[24px] border border-slate-200/80 bg-white/95 p-2 shadow-xl backdrop-blur md:hidden" aria-label="Navigasi utama">
+      <CapsuleDueOverlay />
+
+      <nav className="bottom-safe-area fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 gap-1 rounded-[24px] border border-slate-200/80 bg-white/95 p-2 shadow-xl backdrop-blur md:hidden" aria-label="Navigasi utama">
         {links.map((link) => {
           const active = pathname === link.href;
           return (

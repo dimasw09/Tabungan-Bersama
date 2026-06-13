@@ -14,6 +14,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/ToastProvider';
 import { AppIcon } from '@/components/ui/AppIcon';
 import { AnimatedNumber, AnimatedRupiah } from '@/components/ui/AnimatedNumber';
+import { anniversaryCountdown } from '@/lib/loveCapsule';
 
 function MetricCard({ icon, label, value, helper }: { icon: 'wallet' | 'arrow-down' | 'arrow-up'; label: string; value: number; helper: string }) {
   return (
@@ -80,6 +81,7 @@ export default function DashboardPage() {
   const progressWidth = Math.min(currentMonth.progress, 100);
   const recentMutations = mutations.slice().sort((a, b) => b.mutation_date.localeCompare(a.mutation_date)).slice(0, 4);
   const isMonthComplete = currentMonth.status === 'COMPLETE' || currentMonth.status === 'OVERPAID';
+  const anniversary = useMemo(() => anniversaryCountdown(), []);
 
   if (loading) return <LoadingState />;
 
@@ -138,6 +140,23 @@ export default function DashboardPage() {
             <MetricCard icon="wallet" label="Setoran terkumpul" value={totals.totalDeposits} helper="Total setoran Kakak dan Mpip" />
             <MetricCard icon="arrow-down" label="Tambah rezeki" value={totals.totalAdditions} helper="Rezeki di luar setoran bulanan" />
             <MetricCard icon="arrow-up" label="Kepakai buat kita" value={totals.totalWithdrawals} helper="Momen dan kebutuhan bersama" />
+          </section>
+
+          <section className="mt-5">
+            <Card className="love-sheen relative overflow-hidden !border-0 !bg-gradient-to-br !from-rose-500 !via-pink-500 !to-violet-500 !p-5 text-white md:!p-6">
+              <div className="absolute -right-14 -top-14 h-40 w-40 rounded-full bg-white/10" />
+              <div className="relative grid gap-4 sm:grid-cols-[1fr_auto] sm:items-center">
+                <div className="flex items-start gap-4">
+                  <span className="heart-beat flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15"><AppIcon name="heart" size={25} /></span>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/70">Anniversary kita</p>
+                    <h2 className="mt-1 text-2xl font-bold">25 September ❤️</h2>
+                    <p className="mt-1 text-sm font-medium text-white/80">{anniversary.totalDays === 0 ? 'Hari ini anniversary kita ❤️' : anniversary.totalDays === 1 ? 'Besok hari spesial kita.' : `${anniversary.totalDays} hari lagi menuju hari spesial kita.`}</p>
+                  </div>
+                </div>
+                <Link href="/capsules" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-bold text-rose-600 transition hover:bg-rose-50 focus:outline-none focus:ring-4 focus:ring-white/30"><AppIcon name="gift" size={18} /> Siapkan kejutan</Link>
+              </div>
+            </Card>
           </section>
 
           <section className="mt-5 grid gap-5 lg:grid-cols-[1fr_380px]">

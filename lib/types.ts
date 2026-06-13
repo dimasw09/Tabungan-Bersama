@@ -95,3 +95,39 @@ export interface MonthlyRecap {
   withdrawals: number;
   endingBalance: number;
 }
+
+export type LoveCapsuleTheme = 'rose' | 'lavender' | 'sky' | 'sunset';
+
+export interface LoveCapsule {
+  id: string;
+  household_id: string;
+  sender_user_id: string;
+  recipient_user_id: string;
+  unlock_at: string;
+  teaser: string | null;
+  theme: LoveCapsuleTheme;
+  is_anniversary: boolean;
+  photo_count: number;
+  opened_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LoveCapsuleContent {
+  capsule_id: string;
+  household_id: string;
+  title: string;
+  message: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LoveCapsulePhoto {
+  id: string;
+  household_id: string;
+  capsule_id: string;
+  storage_path: string;
+  sort_order: number;
+  uploaded_by: string | null;
+  created_at: string;
+}

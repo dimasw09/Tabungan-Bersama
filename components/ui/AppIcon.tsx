@@ -1,6 +1,6 @@
 import type { SVGProps } from 'react';
 
-type IconName = 'home' | 'wallet' | 'receipt' | 'heart' | 'image' | 'camera' | 'trash' | 'x' | 'chart' | 'settings' | 'logout' | 'plus' | 'filter' | 'calendar' | 'chevron-left' | 'chevron-right' | 'arrow-down' | 'arrow-up' | 'more' | 'check' | 'clock';
+type IconName = 'home' | 'wallet' | 'receipt' | 'heart' | 'gift' | 'lock' | 'sparkles' | 'image' | 'camera' | 'trash' | 'x' | 'chart' | 'settings' | 'logout' | 'plus' | 'filter' | 'calendar' | 'chevron-left' | 'chevron-right' | 'arrow-down' | 'arrow-up' | 'more' | 'check' | 'clock';
 
 interface AppIconProps extends SVGProps<SVGSVGElement> {
   name: IconName;
@@ -13,6 +13,9 @@ export function AppIcon({ name, size = 20, ...props }: AppIconProps) {
     wallet: <><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4H18v16H6.5A2.5 2.5 0 0 1 4 17.5z"/><path d="M4 7h14"/><path d="M14 12h7v5h-7a2.5 2.5 0 0 1 0-5Z"/><path d="M17 14.5h.01"/></>,
     receipt: <><path d="M6 3h12v18l-3-2-3 2-3-2-3 2Z"/><path d="M9 8h6M9 12h6M9 16h4"/></>,
     heart: <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"/>,
+    gift: <><rect x="3" y="9" width="18" height="12" rx="2"/><path d="M12 9v12M3 13h18M5 9h14V6H5z"/><path d="M12 6c-1.8 0-4-.8-4-2.2C8 2.7 9 2 10.1 2 11.6 2 12 4 12 6Zm0 0c1.8 0 4-.8 4-2.2C16 2.7 15 2 13.9 2 12.4 2 12 4 12 6Z"/></>,
+    lock: <><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></>,
+    sparkles: <><path d="m12 3 1.2 3.3L16.5 7.5l-3.3 1.2L12 12l-1.2-3.3-3.3-1.2 3.3-1.2Z"/><path d="m19 13 .8 2.2L22 16l-2.2.8L19 19l-.8-2.2L16 16l2.2-.8ZM5 14l.7 1.8 1.8.7-1.8.7L5 19l-.7-1.8-1.8-.7 1.8-.7Z"/></>,
     image: <><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="m21 15-5-5L5 20"/></>,
     camera: <><path d="M14.5 4 16 7h3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h3l1.5-3Z"/><circle cx="12" cy="13" r="3.5"/></>,
     trash: <><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></>,
