@@ -549,11 +549,11 @@ export default function MutationsPage() {
       <PageHeader
         title="Cerita Kita"
         description="Catat rezeki, momen yang kita jalani, dan simpan fotonya dalam satu album kecil."
-        action={<Button type="button" onClick={openCreateForm} className="hidden gap-2 md:inline-flex"><AppIcon name="heart" size={18} /> Tulis cerita</Button>}
+        action={<Button type="button" onClick={openCreateForm} className="hidden gap-2 md:inline-flex"><span className="heart-beat inline-flex"><AppIcon name="heart" size={18} /></span> Tulis cerita</Button>}
       />
 
       <Card>
-        <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <div className="stagger-grid mb-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
           <SummaryCard label="Tambah rezeki" value={rupiah(summary.additions)} tone="green" />
           <SummaryCard label="Kepakai buat kita" value={rupiah(summary.withdrawals)} tone="red" />
           <SummaryCard label="Selisih cerita" value={rupiah(summary.net)} tone={summary.net < 0 ? 'red' : 'green'} />
@@ -572,7 +572,7 @@ export default function MutationsPage() {
         </div>
 
         {filtersOpen ? (
-          <div className="mb-5 grid gap-3 rounded-3xl bg-slate-50 p-4 md:grid-cols-5">
+          <div className="soft-pop mb-5 grid gap-3 rounded-3xl bg-slate-50 p-4 md:grid-cols-5">
             <select className="form-input" value={filterYear} onChange={(event) => setFilterYear(event.target.value)} aria-label="Filter tahun cerita">
               <option value="all">Semua tahun</option>
               {years.map((year) => <option key={year} value={year}>{year}</option>)}
@@ -631,7 +631,7 @@ export default function MutationsPage() {
         )}
       </Card>
 
-      <button type="button" onClick={openCreateForm} className="fixed bottom-24 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-rose-500 text-white shadow-xl transition hover:bg-rose-600 focus:outline-none focus:ring-4 focus:ring-rose-200 md:hidden" aria-label="Tulis cerita baru">
+      <button type="button" onClick={openCreateForm} className="fab-love fixed bottom-24 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-rose-500 text-white shadow-xl transition hover:bg-rose-600 focus:outline-none focus:ring-4 focus:ring-rose-200 md:hidden" aria-label="Tulis cerita baru">
         <AppIcon name="heart" size={25} />
       </button>
 

@@ -13,8 +13,9 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/ToastProvider';
 import { AppIcon } from '@/components/ui/AppIcon';
+import { AnimatedNumber, AnimatedRupiah } from '@/components/ui/AnimatedNumber';
 
-function MetricCard({ icon, label, value, helper }: { icon: 'wallet' | 'arrow-down' | 'arrow-up'; label: string; value: string; helper: string }) {
+function MetricCard({ icon, label, value, helper }: { icon: 'wallet' | 'arrow-down' | 'arrow-up'; label: string; value: number; helper: string }) {
   return (
     <Card className="relative overflow-hidden !p-4 md:!p-5">
       <div className="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-blue-50" />
@@ -24,7 +25,7 @@ function MetricCard({ icon, label, value, helper }: { icon: 'wallet' | 'arrow-do
         </div>
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p>
-          <p className="mt-1 truncate text-xl font-bold text-slate-900 md:text-2xl">{value}</p>
+          <p className="mt-1 truncate text-xl font-bold text-slate-900 md:text-2xl"><AnimatedRupiah value={value} /></p>
           <p className="mt-1 text-xs font-medium text-slate-400">{helper}</p>
         </div>
       </div>
@@ -91,12 +92,12 @@ export default function DashboardPage() {
       ) : (
         <>
           <section className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
-            <Card className="relative overflow-hidden !bg-[#4267d6] !p-6 text-white md:!p-8">
+            <Card className="love-sheen relative overflow-hidden !bg-[#4267d6] !p-6 text-white md:!p-8">
               <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/10" />
               <div className="absolute -bottom-28 left-1/3 h-64 w-64 rounded-full bg-white/5" />
               <div className="relative">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/70">Total saldo</p>
-                <h2 className="mt-3 text-4xl font-bold tracking-tight md:text-5xl">{rupiah(totals.balance)}</h2>
+                <h2 className="mt-3 text-4xl font-bold tracking-tight md:text-5xl"><AnimatedRupiah value={totals.balance} duration={1100} /></h2>
                 <p className="mt-3 max-w-xl text-sm font-medium leading-6 text-white/75">Semua setoran dan cerita uang kita sudah dihitung otomatis.</p>
                 <div className="mt-6 grid grid-cols-2 gap-3 sm:max-w-md">
                   <Link href="/deposits" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-semibold text-[#3557bf] transition hover:bg-blue-50 focus:outline-none focus:ring-4 focus:ring-white/30">
@@ -119,7 +120,7 @@ export default function DashboardPage() {
               </div>
               <div className="mt-5 flex items-end justify-between gap-3">
                 <div>
-                  <p className="text-3xl font-bold text-slate-900">{currentMonth.progress}%</p>
+                  <p className="text-3xl font-bold text-slate-900"><AnimatedNumber value={currentMonth.progress} formatter={(value) => `${Math.round(value)}%`} /></p>
                   <p className="mt-1 text-xs font-medium text-slate-400">{rupiah(currentMonth.paid)} dari {rupiah(currentMonth.target)}</p>
                 </div>
                 <p className={`text-right text-sm font-semibold ${isMonthComplete ? 'text-[#3557bf]' : 'text-amber-700'}`}>
@@ -127,16 +128,16 @@ export default function DashboardPage() {
                 </p>
               </div>
               <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
-                <div className="h-full rounded-full bg-[#4267d6] transition-all" style={{ width: `${progressWidth}%` }} />
+                <div className="progress-reveal h-full rounded-full bg-[#4267d6] transition-all" style={{ width: `${progressWidth}%` }} />
               </div>
               <Link href="/deposits" className="mt-5 inline-flex w-full items-center justify-center rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Lihat detail bulan ini</Link>
             </Card>
           </section>
 
-          <section className="mt-4 grid gap-3 sm:grid-cols-3">
-            <MetricCard icon="wallet" label="Setoran terkumpul" value={rupiah(totals.totalDeposits)} helper="Total setoran Kakak dan Mpip" />
-            <MetricCard icon="arrow-down" label="Tambah rezeki" value={rupiah(totals.totalAdditions)} helper="Rezeki di luar setoran bulanan" />
-            <MetricCard icon="arrow-up" label="Kepakai buat kita" value={rupiah(totals.totalWithdrawals)} helper="Momen dan kebutuhan bersama" />
+          <section className="stagger-grid mt-4 grid gap-3 sm:grid-cols-3">
+            <MetricCard icon="wallet" label="Setoran terkumpul" value={totals.totalDeposits} helper="Total setoran Kakak dan Mpip" />
+            <MetricCard icon="arrow-down" label="Tambah rezeki" value={totals.totalAdditions} helper="Rezeki di luar setoran bulanan" />
+            <MetricCard icon="arrow-up" label="Kepakai buat kita" value={totals.totalWithdrawals} helper="Momen dan kebutuhan bersama" />
           </section>
 
           <section className="mt-5 grid gap-5 lg:grid-cols-[1fr_380px]">
@@ -164,7 +165,7 @@ export default function DashboardPage() {
                       <p className="text-sm font-semibold text-[#3557bf]">{item.progress}%</p>
                     </div>
                     <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white">
-                      <div className="h-full rounded-full bg-[#4267d6]" style={{ width: `${item.progress}%` }} />
+                      <div className="progress-reveal h-full rounded-full bg-[#4267d6]" style={{ width: `${item.progress}%` }} />
                     </div>
                     <div className="mt-3 flex justify-between gap-2 text-xs font-medium text-slate-500">
                       <span>Target {rupiah(item.required)}</span>

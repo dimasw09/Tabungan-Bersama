@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import type { Member, MonthlyDeposit, MonthlyRecap, OtherMutation, StoryPhoto } from '@/lib/types';
@@ -14,6 +15,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { AppIcon } from '@/components/ui/AppIcon';
 import { useToast } from '@/components/ui/ToastProvider';
+import { AnimatedNumber, AnimatedRupiah } from '@/components/ui/AnimatedNumber';
 
 interface MonthTogetherness {
   key: string;
@@ -38,7 +40,7 @@ interface TimelineItem {
   photoCount?: number;
 }
 
-function SummaryCard({ label, value, helper, tone = 'blue' }: { label: string; value: string; helper?: string; tone?: 'blue' | 'green' | 'rose' | 'slate' }) {
+function SummaryCard({ label, value, helper, tone = 'blue' }: { label: string; value: ReactNode; helper?: string; tone?: 'blue' | 'green' | 'rose' | 'slate' }) {
   const toneClass = {
     blue: 'bg-blue-50 text-blue-700',
     green: 'bg-emerald-50 text-emerald-700',
@@ -90,11 +92,11 @@ function BalanceChart({ recaps }: { recaps: MonthlyRecap[] }) {
             </text>
           </g>
         ))}
-        <polygon points={`${padding.left},${height - padding.bottom} ${points} ${width - padding.right},${height - padding.bottom}`} fill="url(#balanceArea)" />
-        <polyline points={points} fill="none" stroke="#4267d6" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+        <polygon className="chart-area-in" points={`${padding.left},${height - padding.bottom} ${points} ${width - padding.right},${height - padding.bottom}`} fill="url(#balanceArea)" />
+        <polyline className="chart-line-draw" points={points} fill="none" stroke="#4267d6" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
         {recaps.map((item, index) => (
           <g key={item.key}>
-            <circle cx={x(index)} cy={y(item.endingBalance)} r="5" fill="#ffffff" stroke="#4267d6" strokeWidth="3">
+            <circle className="chart-point-pop" style={{ animationDelay: `${500 + index * 70}ms` }} cx={x(index)} cy={y(item.endingBalance)} r="5" fill="#ffffff" stroke="#4267d6" strokeWidth="3">
               <title>{`${monthLabel(item.year, item.month)}: ${rupiah(item.endingBalance)}`}</title>
             </circle>
             {index % labelStep === 0 || index === recaps.length - 1 ? (
@@ -337,11 +339,11 @@ export default function RecapPage() {
           </div>
         </div>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard label="Saldo akhir" value={rupiah(summary.latest?.endingBalance || 0)} helper={summary.latest ? `Sampai ${monthLabel(summary.latest.year, summary.latest.month)}` : 'Belum ada data'} tone="blue" />
-          <SummaryCard label="Setoran terkumpul" value={rupiah(summary.depositsTotal)} helper="Gabungan target pribadi yang sudah masuk" tone="green" />
-          <SummaryCard label="Tambah rezeki" value={rupiah(summary.additions)} helper="Di luar setoran rutin" tone="slate" />
-          <SummaryCard label="Kepakai buat kita" value={rupiah(summary.withdrawals)} helper="Untuk Cerita dan kebutuhan bersama" tone="rose" />
+        <div className="stagger-grid mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <SummaryCard label="Saldo akhir" value={<AnimatedRupiah value={summary.latest?.endingBalance || 0} />} helper={summary.latest ? `Sampai ${monthLabel(summary.latest.year, summary.latest.month)}` : 'Belum ada data'} tone="blue" />
+          <SummaryCard label="Setoran terkumpul" value={<AnimatedRupiah value={summary.depositsTotal} />} helper="Gabungan target pribadi yang sudah masuk" tone="green" />
+          <SummaryCard label="Tambah rezeki" value={<AnimatedRupiah value={summary.additions} />} helper="Di luar setoran rutin" tone="slate" />
+          <SummaryCard label="Kepakai buat kita" value={<AnimatedRupiah value={summary.withdrawals} />} helper="Untuk Cerita dan kebutuhan bersama" tone="rose" />
         </div>
       </Card>
 
@@ -372,11 +374,11 @@ export default function RecapPage() {
               <h2 className="mt-1 text-xl font-bold text-slate-900">Target pribadi, dirayakan bersama</h2>
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
                 <div className="rounded-3xl bg-blue-50 p-4">
-                  <p className="text-3xl font-black text-blue-700">{summary.completeMonths}</p>
+                  <p className="text-3xl font-black text-blue-700"><AnimatedNumber value={summary.completeMonths} /></p>
                   <p className="mt-1 text-sm font-bold text-slate-700">bulan lengkap bersama</p>
                 </div>
                 <div className="rounded-3xl bg-emerald-50 p-4">
-                  <p className="text-3xl font-black text-emerald-700">{summary.streak}</p>
+                  <p className="text-3xl font-black text-emerald-700"><AnimatedNumber value={summary.streak} /></p>
                   <p className="mt-1 text-sm font-bold text-slate-700">streak lengkap saat ini</p>
                 </div>
                 <div className="rounded-3xl bg-slate-50 p-4">

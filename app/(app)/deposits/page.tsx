@@ -25,6 +25,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { useToast } from '@/components/ui/ToastProvider';
 import { RupiahInput } from '@/components/ui/RupiahInput';
 import { AppIcon } from '@/components/ui/AppIcon';
+import { AnimatedNumber, AnimatedRupiah } from '@/components/ui/AnimatedNumber';
 
 const initialYearMonth = currentYearMonth();
 const MIN_DEPOSIT_YEAR = 2026;
@@ -152,7 +153,7 @@ function PaymentCard({
   const hasPayment = row.paid_amount > 0;
 
   return (
-    <div className="rounded-[26px] border border-slate-100 bg-white p-4 shadow-sm md:rounded-[28px] md:p-5" style={{ boxShadow: '0 12px 30px rgba(52, 77, 147, 0.10)' }}>
+    <div className="motion-card rounded-[26px] border border-slate-100 bg-white p-4 shadow-sm md:rounded-[28px] md:p-5" style={{ boxShadow: '0 12px 30px rgba(52, 77, 147, 0.10)' }}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <span className="badge text-slate-700" style={{ backgroundColor: row.member.color || (row.member.name === 'Mpip' ? '#E3A2C8' : '#A4BBE0') }}>
@@ -168,12 +169,12 @@ function PaymentCard({
         <div className="flex items-end justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Udah masuk</p>
-            <p className="mt-1 text-xl font-bold text-slate-900">{rupiah(row.paid_amount)}</p>
+            <p className="mt-1 text-xl font-bold text-slate-900"><AnimatedRupiah value={row.paid_amount} /></p>
           </div>
-          <p className="text-sm font-semibold text-[#3557bf]">{progress}%</p>
+          <p className="text-sm font-semibold text-[#3557bf]"><AnimatedNumber value={progress} formatter={(value) => `${Math.round(value)}%`} /></p>
         </div>
         <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white">
-          <div className="h-full rounded-full bg-[#4267d6]" style={{ width: `${progress}%` }} />
+          <div className="progress-reveal h-full rounded-full bg-[#4267d6]" style={{ width: `${progress}%` }} />
         </div>
         <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-slate-500">
           <span>TF: {formatDate(row.actual_transfer_date)}</span>
@@ -667,7 +668,7 @@ export default function DepositsPage() {
         description="Pilih periode lalu catat setoran milikmu. Data pasangan tetap bisa dilihat bersama."
       />
 
-      <Card className="overflow-hidden !bg-[#4267d6] !p-4 text-white md:!p-5">
+      <Card className="love-sheen overflow-hidden !bg-[#4267d6] !p-4 text-white md:!p-5">
         <div className="flex items-center justify-between gap-2">
           <Button
             type="button"
@@ -706,21 +707,21 @@ export default function DepositsPage() {
           <div className="flex items-end justify-between gap-3">
             <div>
               <p className="text-sm font-medium text-white/75">Sudah terkumpul</p>
-              <p className="mt-1 text-[30px] font-bold leading-tight md:text-3xl">{rupiah(monthSummary.paid)}</p>
+              <p className="mt-1 text-[30px] font-bold leading-tight md:text-3xl"><AnimatedRupiah value={monthSummary.paid} /></p>
               <p className="mt-1 text-xs font-medium text-white/70">Target {rupiah(monthSummary.target)} • Kurang {rupiah(monthSummary.remaining)}</p>
             </div>
             <div className="text-right">
-              <p className="text-[30px] font-bold leading-tight md:text-3xl">{monthSummary.progress}%</p>
+              <p className="text-[30px] font-bold leading-tight md:text-3xl"><AnimatedNumber value={monthSummary.progress} formatter={(value) => `${Math.round(value)}%`} /></p>
               <p className="text-xs font-medium text-white/70">{monthlyProgressLabel(monthSummary.status)}</p>
             </div>
           </div>
           <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-white/20 md:h-3">
-            <div className="h-full rounded-full bg-white transition-all" style={{ width: `${monthSummary.progress}%` }} />
+            <div className="progress-reveal h-full rounded-full bg-white transition-all" style={{ width: `${monthSummary.progress}%` }} />
           </div>
         </div>
       </Card>
 
-      <section className="grid gap-4 md:grid-cols-2">
+      <section className="stagger-grid grid gap-4 md:grid-cols-2">
         {selectedRows.length === 0 ? (
           <EmptyState title="Anggota belum ada" description="Data Kakak dan Mpip belum tersedia atau belum terhubung ke household ini." />
         ) : (

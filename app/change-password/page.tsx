@@ -104,8 +104,8 @@ export default function ChangePasswordPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center px-4 py-10">
-      <section className="w-full max-w-md rounded-[2rem] border border-white/80 bg-white p-6 shadow-soft md:p-8" aria-labelledby="change-password-title">
-        <div className="rounded-[1.5rem] bg-[#4267d6] p-5 text-white">
+      <section className="login-love-card w-full max-w-md rounded-[2rem] border border-white/80 bg-white p-6 shadow-soft md:p-8" aria-labelledby="change-password-title">
+        <div className="blue-hero rounded-[1.5rem] bg-[#4267d6] p-5 text-white">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/75">Langkah pertama</p>
           <h1 id="change-password-title" className="mt-2 text-2xl font-bold">Buat password pribadi</h1>
           <p className="mt-2 text-sm font-medium leading-6 text-white/80">Password bawaan hanya dipakai sekali. Setelah ini, masuklah dengan password yang hanya kamu ketahui.</p>

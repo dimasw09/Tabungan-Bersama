@@ -86,8 +86,8 @@ export default function LoginPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center px-4 py-10">
-      <section className="w-full max-w-md rounded-[2rem] border border-white/80 bg-white p-6 shadow-soft md:p-8" aria-labelledby="login-title">
-        <div className="rounded-[1.5rem] bg-[#4267d6] p-5 text-white">
+      <section className="login-love-card w-full max-w-md rounded-[2rem] border border-white/80 bg-white p-6 shadow-soft md:p-8" aria-labelledby="login-title">
+        <div className="blue-hero rounded-[1.5rem] bg-[#4267d6] p-5 text-white">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/75">Tabungan Cinta</p>
           <h1 id="login-title" className="mt-2 text-2xl font-bold">Masuk sebagai Kakak atau Mpip</h1>
           <p className="mt-2 text-sm font-medium text-white/80">Pakai username pribadi dan password akun masing-masing.</p>

@@ -56,8 +56,8 @@ export function ConfirmDialog({ open, title, description, confirmLabel = 'Iya, l
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-stone-900/40 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget && !loading) onClose(); }}>
-      <div ref={panelRef} role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined} onKeyDown={trapFocus} className="w-full max-w-md overflow-hidden rounded-[2rem] border border-white/80 bg-white p-5 shadow-lg">
+    <div className="modal-backdrop-in fixed inset-0 z-[70] flex items-center justify-center bg-stone-900/40 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget && !loading) onClose(); }}>
+      <div ref={panelRef} role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined} onKeyDown={trapFocus} className="modal-panel-in w-full max-w-md overflow-hidden rounded-[2rem] border border-white/80 bg-white p-5 shadow-lg">
         <div className="-mx-5 -mt-5 mb-5 h-1.5 bg-[#4267d6]" />
         <h2 id={titleId} className="text-lg font-bold text-slate-900">{title}</h2>
         {description ? <p id={descriptionId} className="mt-2 text-sm font-medium leading-6 text-slate-600">{description}</p> : null}

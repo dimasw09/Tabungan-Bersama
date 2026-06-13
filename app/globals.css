@@ -68,3 +68,197 @@ input[type='date']::-webkit-calendar-picker-indicator { cursor: pointer; opacity
 @media (max-width: 639px) {
   .action-menu-panel { min-width: 11rem; }
 }
+
+/* Tahap 2.4 — Romantic motion system */
+@keyframes love-float {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(-8deg) scale(0.9); opacity: 0.12; }
+  35% { opacity: 0.28; }
+  50% { transform: translate3d(var(--love-drift), -28px, 0) rotate(8deg) scale(1.08); opacity: 0.2; }
+}
+
+@keyframes love-orbit {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(28px, -18px, 0) scale(1.08); }
+}
+
+@keyframes page-rise {
+  from { opacity: 0; transform: translateY(14px) scale(0.995); filter: blur(2px); }
+  to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+
+@keyframes soft-pop {
+  0% { opacity: 0; transform: translateY(12px) scale(0.96); }
+  70% { transform: translateY(-2px) scale(1.01); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes heart-beat {
+  0%, 100% { transform: scale(1); }
+  14% { transform: scale(1.13); }
+  28% { transform: scale(1); }
+  42% { transform: scale(1.08); }
+  70% { transform: scale(1); }
+}
+
+@keyframes sheen {
+  0% { transform: translateX(-140%) skewX(-18deg); }
+  55%, 100% { transform: translateX(260%) skewX(-18deg); }
+}
+
+@keyframes progress-reveal {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes chart-draw {
+  from { stroke-dashoffset: 1800; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes chart-area-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes chart-point-pop {
+  0% { opacity: 0; transform: scale(0); transform-origin: center; }
+  70% { transform: scale(1.25); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes nav-breathe {
+  0%, 100% { box-shadow: 0 10px 26px rgba(66, 103, 214, 0.22); }
+  50% { box-shadow: 0 13px 32px rgba(66, 103, 214, 0.34); }
+}
+
+.love-atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+.love-heart {
+  position: absolute;
+  left: var(--love-x);
+  top: var(--love-y);
+  color: rgba(238, 114, 151, 0.72);
+  font-size: var(--love-size);
+  line-height: 1;
+  filter: blur(0.1px);
+  animation: love-float var(--love-duration) ease-in-out var(--love-delay) infinite;
+  will-change: transform, opacity;
+}
+
+.love-orb {
+  position: absolute;
+  width: 18rem;
+  height: 18rem;
+  border-radius: 999px;
+  filter: blur(54px);
+  opacity: 0.18;
+  animation: love-orbit 14s ease-in-out infinite;
+}
+
+.love-orb-one { top: 12%; left: -8rem; background: rgba(244, 114, 182, 0.45); }
+.love-orb-two { right: -8rem; bottom: 10%; background: rgba(129, 140, 248, 0.4); animation-delay: -7s; }
+
+.page-enter { animation: page-rise 520ms cubic-bezier(.2,.7,.2,1) both; }
+.reveal-up { animation: page-rise 500ms cubic-bezier(.2,.7,.2,1) both; }
+.soft-pop { animation: soft-pop 600ms cubic-bezier(.2,.8,.2,1) both; }
+.heart-beat { animation: heart-beat 2.8s ease-in-out infinite; transform-origin: center; }
+.progress-reveal { transform-origin: left center; animation: progress-reveal 900ms cubic-bezier(.2,.8,.2,1) both; }
+
+.motion-card {
+  transform: translateZ(0);
+  transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .motion-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(147, 197, 253, 0.72);
+    box-shadow: 0 18px 42px rgba(52, 77, 147, 0.15) !important;
+  }
+
+  .story-card:hover { transform: translateY(-5px) rotate(-0.2deg); }
+  .story-card:hover img { transform: scale(1.035); }
+  .button-pop:hover { transform: translateY(-1px) scale(1.015); }
+}
+
+.button-pop { transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease, color 180ms ease; }
+.button-pop:active { transform: scale(0.97); }
+
+.blue-hero,
+.love-sheen {
+  position: relative;
+  isolation: isolate;
+}
+
+.blue-hero::after,
+.love-sheen::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: -45%;
+  bottom: -45%;
+  left: -18%;
+  width: 24%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.24), transparent);
+  animation: sheen 6.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.nav-active-love { animation: nav-breathe 3.2s ease-in-out infinite; }
+.story-card { transition: transform 240ms ease, box-shadow 240ms ease, border-color 240ms ease; }
+.story-card img { transition: transform 450ms cubic-bezier(.2,.8,.2,1); }
+.story-card:nth-child(1) { animation: soft-pop 520ms 40ms both; }
+.story-card:nth-child(2) { animation: soft-pop 520ms 100ms both; }
+.story-card:nth-child(3) { animation: soft-pop 520ms 160ms both; }
+.story-card:nth-child(4) { animation: soft-pop 520ms 220ms both; }
+.story-card:nth-child(n+5) { animation: soft-pop 520ms 280ms both; }
+
+.stagger-grid > * { animation: soft-pop 520ms both; }
+.stagger-grid > *:nth-child(1) { animation-delay: 40ms; }
+.stagger-grid > *:nth-child(2) { animation-delay: 100ms; }
+.stagger-grid > *:nth-child(3) { animation-delay: 160ms; }
+.stagger-grid > *:nth-child(4) { animation-delay: 220ms; }
+.stagger-grid > *:nth-child(5) { animation-delay: 280ms; }
+.stagger-grid > *:nth-child(n+6) { animation-delay: 320ms; }
+
+.chart-line-draw {
+  stroke-dasharray: 1800;
+  stroke-dashoffset: 1800;
+  animation: chart-draw 1.5s cubic-bezier(.2,.7,.2,1) 180ms forwards;
+}
+.chart-area-in { animation: chart-area-in 850ms ease 300ms both; transform-origin: bottom; }
+.chart-point-pop { opacity: 0; animation: chart-point-pop 420ms cubic-bezier(.2,.8,.2,1) both; transform-box: fill-box; }
+
+.fab-love { animation: heart-beat 2.8s ease-in-out infinite, nav-breathe 3.2s ease-in-out infinite; }
+.fab-love:active { transform: scale(0.92); }
+
+.login-love-card { animation: soft-pop 650ms cubic-bezier(.2,.8,.2,1) both; }
+.login-love-card .blue-hero,
+.login-love-card > div:first-child { overflow: hidden; position: relative; }
+
+@media (prefers-reduced-motion: reduce) {
+  .love-atmosphere { display: none; }
+  .page-enter, .reveal-up, .soft-pop, .heart-beat, .progress-reveal, .nav-active-love,
+  .story-card, .stagger-grid > *, .chart-line-draw, .chart-area-in, .chart-point-pop, .fab-love,
+  .login-love-card, .blue-hero::after, .love-sheen::after {
+    animation: none !important;
+    transform: none !important;
+  }
+  .motion-card:hover, .story-card:hover, .button-pop:hover { transform: none !important; }
+}
+
+@keyframes backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-backdrop-in { animation: backdrop-in 180ms ease-out both; }
+.modal-panel-in { animation: soft-pop 360ms cubic-bezier(.2,.8,.2,1) both; }
+.toast-pop { animation: soft-pop 380ms cubic-bezier(.2,.8,.2,1) both; }

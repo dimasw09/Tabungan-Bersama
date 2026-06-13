@@ -53,7 +53,7 @@ export function Modal({ open, title, description, children, onClose, mobileSheet
   if (!open) return null;
 
   return (
-    <div className={`fixed inset-0 z-50 flex bg-slate-950/45 backdrop-blur-sm ${mobileSheet ? 'items-end p-0 sm:items-center sm:justify-center sm:p-4' : 'items-center justify-center p-4'}`} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className={`modal-backdrop-in fixed inset-0 z-50 flex bg-slate-950/45 backdrop-blur-sm ${mobileSheet ? 'items-end p-0 sm:items-center sm:justify-center sm:p-4' : 'items-center justify-center p-4'}`} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <div
         ref={panelRef}
         role="dialog"
@@ -61,7 +61,7 @@ export function Modal({ open, title, description, children, onClose, mobileSheet
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
         onKeyDown={trapFocus}
-        className={`max-h-[92dvh] w-full max-w-2xl overflow-auto bg-white shadow-2xl ${mobileSheet ? 'rounded-t-[2rem] p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:rounded-[2rem]' : 'rounded-[2rem] p-5'}`}
+        className={`modal-panel-in max-h-[92dvh] w-full max-w-2xl overflow-auto bg-white shadow-2xl ${mobileSheet ? 'rounded-t-[2rem] p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:rounded-[2rem]' : 'rounded-[2rem] p-5'}`}
       >
         {mobileSheet ? <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-slate-200 sm:hidden" /> : null}
         <div className="mb-5 flex items-start justify-between gap-4">

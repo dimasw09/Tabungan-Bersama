@@ -38,7 +38,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={item.id}
             role={item.type === 'error' ? 'alert' : 'status'}
-            className={`rounded-3xl border bg-white p-4 text-sm shadow-lg ${
+            className={`toast-pop rounded-3xl border bg-white p-4 text-sm shadow-lg ${
               item.type === 'success'
                 ? 'border-skysoft-200'
                 : item.type === 'error'
