@@ -1,7 +1,8 @@
 'use client';
 
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 interface ModalProps {
   open: boolean;
@@ -19,7 +20,9 @@ export function Modal({ open, title, description, children, onClose, mobileSheet
   const descriptionId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
+  const [mounted, setMounted] = useState(false);
 
+  useEffect(() => { setMounted(true); }, []);
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
   useEffect(() => {
@@ -50,10 +53,10 @@ export function Modal({ open, title, description, children, onClose, mobileSheet
     if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   }
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
-    <div className={`modal-backdrop-in fixed inset-0 z-50 flex bg-slate-950/45 backdrop-blur-sm ${mobileSheet ? 'items-end p-0 sm:items-center sm:justify-center sm:p-4' : 'items-center justify-center p-4'}`} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+  return createPortal((
+    <div className={`modal-backdrop-in fixed inset-0 z-[120] flex bg-slate-950/45 backdrop-blur-sm ${mobileSheet ? 'items-end p-0 sm:items-center sm:justify-center sm:p-4' : 'items-center justify-center p-4'}`} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <div
         ref={panelRef}
         role="dialog"
@@ -76,5 +79,5 @@ export function Modal({ open, title, description, children, onClose, mobileSheet
         {children}
       </div>
     </div>
-  );
+  ), document.body);
 }

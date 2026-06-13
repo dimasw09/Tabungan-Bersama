@@ -631,7 +631,7 @@ export default function MutationsPage() {
         )}
       </Card>
 
-      <button type="button" onClick={openCreateForm} className="fab-love fixed bottom-24 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-rose-500 text-white shadow-xl transition hover:bg-rose-600 focus:outline-none focus:ring-4 focus:ring-rose-200 md:hidden" aria-label="Tulis cerita baru">
+      <button type="button" onClick={openCreateForm} className="fab-love mobile-fab-safe fixed right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-rose-500 text-white shadow-xl transition hover:bg-rose-600 focus:outline-none focus:ring-4 focus:ring-rose-200 md:hidden" aria-label="Tulis cerita baru">
         <AppIcon name="heart" size={25} />
       </button>
 

@@ -43,7 +43,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="relative min-h-screen px-3 py-3 pb-28 md:px-6 md:py-6">
+    <div className="app-mobile-content-safe relative min-h-screen px-3 py-3 md:px-6 md:py-6">
       <div className="mx-auto max-w-5xl">
         <header className="blue-hero soft-pop mb-4 overflow-hidden rounded-[26px] p-4 text-white shadow-sm md:mb-5 md:rounded-[30px] md:p-5" style={{ boxShadow: '0 18px 40px rgba(52, 77, 147, 0.24)' }}>
           <span aria-hidden="true" className="heart-beat pointer-events-none absolute right-24 top-4 hidden text-4xl text-white/15 sm:block">♥</span>
@@ -85,7 +85,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <CapsuleDueOverlay />
 
-      <nav className="bottom-safe-area fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 gap-1 rounded-[24px] border border-slate-200/80 bg-white/95 p-2 shadow-xl backdrop-blur md:hidden" aria-label="Navigasi utama">
+      <nav className="mobile-bottom-nav fixed inset-x-3 z-40 grid grid-cols-5 gap-1 rounded-[24px] border border-slate-200/80 bg-white/95 p-2 shadow-xl backdrop-blur md:hidden" aria-label="Navigasi utama">
         {links.map((link) => {
           const active = pathname === link.href;
           return (

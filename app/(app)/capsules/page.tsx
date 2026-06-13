@@ -580,7 +580,7 @@ export default function CapsulesPage() {
         </section>
       )}
 
-      <button type="button" onClick={() => openCreate(false)} className="fab-love fixed bottom-24 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[#4267d6] text-white shadow-xl md:hidden" aria-label="Buat Love Capsule"><AppIcon name="gift" size={25} /></button>
+      <button type="button" onClick={() => openCreate(false)} className="fab-love mobile-fab-safe fixed right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[#4267d6] text-white shadow-xl md:hidden" aria-label="Buat Love Capsule"><AppIcon name="gift" size={25} /></button>
 
       <Modal open={formOpen} onClose={closeForm} title={editing ? 'Edit Love Capsule' : 'Buat Love Capsule'} description="Pesan dan foto hanya bisa dibaca penerima setelah waktu buka." mobileSheet>
         <form onSubmit={handleSubmit} className="space-y-5">

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { LoveCapsuleTheme } from '@/lib/types';
 import { formatCapsuleDateTime } from '@/lib/loveCapsule';
 import { AppIcon } from '@/components/ui/AppIcon';
@@ -35,8 +36,11 @@ const themeClass: Record<LoveCapsuleTheme, string> = {
 };
 
 export function CapsuleRecipientPreview({ data, onClose }: CapsuleRecipientPreviewProps) {
+  const [mounted, setMounted] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     if (!data) return;
@@ -58,23 +62,23 @@ export function CapsuleRecipientPreview({ data, onClose }: CapsuleRecipientPrevi
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [data, viewerIndex, onClose]);
 
-  if (!data) return null;
+  if (!data || !mounted) return null;
 
   const activeIndex = viewerIndex;
   const activePhoto = activeIndex === null ? null : data.photos[activeIndex];
   if (activePhoto && activeIndex !== null) {
-    return (
+    return createPortal((
       <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/95 p-4" role="dialog" aria-modal="true" aria-label="Preview foto Love Capsule">
         <button type="button" onClick={() => setViewerIndex(null)} className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white" aria-label="Tutup foto"><AppIcon name="x" /></button>
         {data.photos.length > 1 ? <button type="button" onClick={() => setViewerIndex((activeIndex - 1 + data.photos.length) % data.photos.length)} className="absolute left-3 flex h-12 w-12 items-center justify-center rounded-full bg-white/15 text-white" aria-label="Foto sebelumnya"><AppIcon name="chevron-left" size={28} /></button> : null}
         {activePhoto.url ? <img src={activePhoto.url} alt={`Preview foto ${activeIndex + 1}`} className="max-h-[82dvh] max-w-full rounded-3xl object-contain shadow-2xl" /> : null}
         {data.photos.length > 1 ? <button type="button" onClick={() => setViewerIndex((activeIndex + 1) % data.photos.length)} className="absolute right-3 flex h-12 w-12 items-center justify-center rounded-full bg-white/15 text-white" aria-label="Foto berikutnya"><AppIcon name="chevron-right" size={28} /></button> : null}
       </div>
-    );
+    ), document.body);
   }
 
   if (!revealed) {
-    return (
+    return createPortal((
       <div className="capsule-backdrop fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="capsule-preview-sealed-title">
         <div className={`capsule-shake relative w-full max-w-md overflow-hidden rounded-[2.25rem] bg-gradient-to-br ${themeClass[data.theme]} p-[1px] shadow-2xl`}>
           <div className="rounded-[calc(2.25rem-1px)] bg-white p-6 text-center md:p-8">
@@ -94,10 +98,10 @@ export function CapsuleRecipientPreview({ data, onClose }: CapsuleRecipientPrevi
           </div>
         </div>
       </div>
-    );
+    ), document.body);
   }
 
-  return (
+  return createPortal((
     <div className="capsule-backdrop fixed inset-0 z-[140] flex items-center justify-center overflow-y-auto bg-slate-950/70 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="capsule-preview-title">
       <div className="capsule-reveal relative my-auto w-full max-w-2xl overflow-hidden rounded-[2.25rem] bg-white shadow-2xl">
         <div className={`relative bg-gradient-to-br ${themeClass[data.theme]} px-6 py-10 text-center text-white`}>
@@ -128,5 +132,5 @@ export function CapsuleRecipientPreview({ data, onClose }: CapsuleRecipientPrevi
         </div>
       </div>
     </div>
-  );
+  ), document.body);
 }

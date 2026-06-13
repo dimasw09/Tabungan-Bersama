@@ -34,12 +34,13 @@ input[type='date']::-webkit-calendar-picker-indicator { cursor: pointer; opacity
   .mobile-data-card { @apply rounded-[24px] border border-slate-100 bg-white p-4 shadow-sm; box-shadow: var(--card-shadow); }
   .simple-card { @apply rounded-[28px] border border-slate-100 bg-white p-5 shadow-sm; box-shadow: var(--card-shadow); }
   .action-menu { @apply relative; }
-  .story-card:has(.action-menu[open]) { z-index: 30; }
-  .capsule-card:has(.action-menu[open]) { z-index: 50; }
-  .action-menu[open] { z-index: 40; }
+  .story-card:has(.action-menu[open]),
+  .capsule-card:has(.action-menu[open]),
+  .motion-card:has(.action-menu[open]) { position: relative; z-index: 70; }
+  .action-menu[open] { z-index: 80; }
   .action-menu summary { @apply list-none cursor-pointer select-none rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 shadow-sm; }
   .action-menu summary::-webkit-details-marker { display: none; }
-  .action-menu-panel { @apply absolute right-0 top-11 z-40 min-w-36 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl; }
+  .action-menu-panel { @apply absolute right-0 top-11 z-[90] min-w-36 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl; }
   .app-panel { @apply rounded-[28px] bg-white; box-shadow: var(--card-shadow); }
   .app-soft { @apply rounded-[22px] bg-blue-50 text-slate-700; }
   .page-note { @apply text-xs font-medium text-slate-400; }
@@ -49,9 +50,13 @@ input[type='date']::-webkit-calendar-picker-indicator { cursor: pointer; opacity
 
 
 @layer utilities {
-  .bottom-safe-area {
-    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
-  }
+  .app-mobile-content-safe { padding-bottom: calc(7.5rem + env(safe-area-inset-bottom)); }
+  .mobile-bottom-nav { bottom: max(0.75rem, env(safe-area-inset-bottom)); }
+  .mobile-fab-safe { bottom: calc(6.5rem + env(safe-area-inset-bottom)); }
+}
+
+@media (min-width: 768px) {
+  .app-mobile-content-safe { padding-bottom: 1.5rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -66,8 +71,22 @@ input[type='date']::-webkit-calendar-picker-indicator { cursor: pointer; opacity
   .tap-highlight-none { -webkit-tap-highlight-color: transparent; }
 }
 
-@media (max-width: 639px) {
-  .action-menu-panel { min-width: 11rem; }
+@media (max-width: 767px) {
+  .action-menu-panel {
+    top: auto;
+    bottom: calc(100% + 0.55rem);
+    min-width: 11rem;
+    max-height: min(18rem, calc(100dvh - 9rem - env(safe-area-inset-bottom)));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .action-menu[open] > summary {
+    position: relative;
+    z-index: 91;
+    border-color: rgb(147 197 253);
+    box-shadow: 0 0 0 4px rgb(219 234 254 / 0.8);
+  }
 }
 
 /* Tahap 2.4 — Romantic motion system */
@@ -84,7 +103,7 @@ input[type='date']::-webkit-calendar-picker-indicator { cursor: pointer; opacity
 
 @keyframes page-rise {
   from { opacity: 0; transform: translateY(14px) scale(0.995); filter: blur(2px); }
-  to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  to { opacity: 1; transform: none; filter: none; }
 }
 
 @keyframes soft-pop {
@@ -173,6 +192,7 @@ input[type='date']::-webkit-calendar-picker-indicator { cursor: pointer; opacity
 .progress-reveal { transform-origin: left center; animation: progress-reveal 900ms cubic-bezier(.2,.8,.2,1) both; }
 
 .motion-card {
+  position: relative;
   transform: translateZ(0);
   transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
 }

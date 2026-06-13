@@ -1,7 +1,8 @@
 'use client';
 
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from './Button';
 
 interface ConfirmDialogProps {
@@ -24,6 +25,9 @@ export function ConfirmDialog({ open, title, description, confirmLabel = 'Iya, l
   const descriptionId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -53,10 +57,10 @@ export function ConfirmDialog({ open, title, description, confirmLabel = 'Iya, l
     if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   }
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
-    <div className="modal-backdrop-in fixed inset-0 z-[70] flex items-center justify-center bg-stone-900/40 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget && !loading) onClose(); }}>
+  return createPortal((
+    <div className="modal-backdrop-in fixed inset-0 z-[130] flex items-center justify-center bg-stone-900/40 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget && !loading) onClose(); }}>
       <div ref={panelRef} role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined} onKeyDown={trapFocus} className="modal-panel-in w-full max-w-md overflow-hidden rounded-[2rem] border border-white/80 bg-white p-5 shadow-lg">
         <div className="-mx-5 -mt-5 mb-5 h-1.5 bg-[#4267d6]" />
         <h2 id={titleId} className="text-lg font-bold text-slate-900">{title}</h2>
@@ -68,5 +72,5 @@ export function ConfirmDialog({ open, title, description, confirmLabel = 'Iya, l
         </div>
       </div>
     </div>
-  );
+  ), document.body);
 }
