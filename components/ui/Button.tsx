@@ -1,10 +1,11 @@
 import type { ButtonHTMLAttributes, PropsWithChildren } from 'react';
+import { forwardRef } from 'react';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'success';
 }
 
-const variants = {
+const variants: Record<NonNullable<ButtonProps['variant']>, string> = {
   primary: 'bg-[#4267d6] text-white hover:bg-[#3557bf]',
   secondary: 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
   success: 'bg-[#dfe8ff] text-[#3557bf] hover:bg-[#cfdcff]',
@@ -12,13 +13,13 @@ const variants = {
   ghost: 'bg-transparent text-slate-600 hover:bg-slate-100'
 };
 
-export function Button({ children, className = '', variant = 'primary', ...props }: PropsWithChildren<ButtonProps>) {
+export const Button = forwardRef<HTMLButtonElement, PropsWithChildren<ButtonProps>>(function Button(
+  { children, className = '', variant = 'primary', ...props },
+  ref
+) {
   return (
-    <button
-      className={`inline-flex items-center justify-center rounded-2xl px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${variants[variant]} ${className}`}
-      {...props}
-    >
+    <button ref={ref} className={`inline-flex items-center justify-center rounded-2xl px-4 py-2.5 text-sm font-semibold transition focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60 ${variants[variant]} ${className}`} {...props}>
       {children}
     </button>
   );
-}
+});

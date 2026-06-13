@@ -8,7 +8,7 @@ export interface DepositInsertRow {
   due_date: string;
   required_amount: number;
   paid_amount: number;
-  status: string;
+  status: 'UNPAID';
 }
 
 export function buildMonthlyDepositRows(members: Member[], startYear: number, startMonth: number, totalMonths: number) {
@@ -27,7 +27,7 @@ export function buildMonthlyDepositRows(members: Member[], startYear: number, st
         due_date: safeDueDate(year, month, member.payday),
         required_amount: Number(member.monthly_amount),
         paid_amount: 0,
-        status: 'Belum Dibayar'
+        status: 'UNPAID'
       });
     });
   }

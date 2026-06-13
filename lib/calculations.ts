@@ -1,4 +1,4 @@
-import type { Member, MonthlyDeposit, MonthlyRecap, OtherMutation } from './types';
+import type { Member, MonthlyDeposit, MonthlyProgressStatus, MonthlyRecap, OtherMutation } from './types';
 import { currentYearMonth, toNumber } from './format';
 import { depositProgress, depositRemaining, getComputedDepositStatus } from './depositStatus';
 
@@ -34,9 +34,9 @@ export function calculateCurrentMonthStats(members: Member[], deposits: MonthlyD
   const paid = currentDeposits.reduce((sum, item) => sum + toNumber(item.paid_amount), 0);
   const progress = target > 0 ? Math.round((paid / target) * 100) : 0;
 
-  let status = 'Belum Lengkap';
-  if (target > 0 && paid === target) status = 'Lengkap';
-  if (target > 0 && paid > target) status = 'Lebih';
+  let status: MonthlyProgressStatus = paid <= 0 ? 'EMPTY' : 'INCOMPLETE';
+  if (target > 0 && paid === target) status = 'COMPLETE';
+  if (target > 0 && paid > target) status = 'OVERPAID';
 
   return { year, month, target, paid, remaining: Math.max(target - paid, 0), progress, status };
 }
@@ -54,7 +54,7 @@ export function calculateMemberMonthStats(members: Member[], deposits: MonthlyDe
       paid,
       remaining: Math.max(required - paid, 0),
       progress: deposit ? depositProgress(deposit) : 0,
-      status: deposit ? getComputedDepositStatus(deposit) : 'Belum Dibayar'
+      status: deposit ? getComputedDepositStatus(deposit) : 'UNPAID'
     };
   });
 }
@@ -63,9 +63,9 @@ export function calculateFilteredDepositSummary(deposits: MonthlyDeposit[]) {
   const required = deposits.reduce((sum, item) => sum + toNumber(item.required_amount), 0);
   const paid = deposits.reduce((sum, item) => sum + toNumber(item.paid_amount), 0);
   const remaining = deposits.reduce((sum, item) => sum + depositRemaining(item), 0);
-  const completeCount = deposits.filter((item) => getComputedDepositStatus(item) === 'Terbayar').length;
-  const lateCount = deposits.filter((item) => getComputedDepositStatus(item) === 'Terbayar Telat').length;
-  const problemCount = deposits.filter((item) => ['Belum Dibayar', 'Kurang'].includes(getComputedDepositStatus(item))).length;
+  const completeCount = deposits.filter((item) => getComputedDepositStatus(item) === 'PAID').length;
+  const lateCount = deposits.filter((item) => getComputedDepositStatus(item) === 'PAID_LATE').length;
+  const problemCount = deposits.filter((item) => getComputedDepositStatus(item) === 'UNPAID' || getComputedDepositStatus(item) === 'PARTIAL').length;
 
   return { required, paid, remaining, completeCount, lateCount, problemCount, count: deposits.length };
 }
@@ -82,7 +82,7 @@ export function calculateMonthlyRecaps(deposits: MonthlyDeposit[], mutations: Ot
         month,
         mpipDeposit: 0,
         kakakDeposit: 0,
-        totalRequiredDeposits: 0,
+        totalPaidDeposits: 0,
         additions: 0,
         withdrawals: 0,
         endingBalance: 0
@@ -98,7 +98,7 @@ export function calculateMonthlyRecaps(deposits: MonthlyDeposit[], mutations: Ot
 
     if (name === 'mpip') bucket.mpipDeposit += paid;
     if (name === 'kakak') bucket.kakakDeposit += paid;
-    bucket.totalRequiredDeposits += paid;
+    bucket.totalPaidDeposits += paid;
   });
 
   mutations.forEach((mutation) => {
@@ -113,7 +113,16 @@ export function calculateMonthlyRecaps(deposits: MonthlyDeposit[], mutations: Ot
   const sorted = Array.from(buckets.values()).sort((a, b) => a.year - b.year || a.month - b.month);
   let runningBalance = 0;
   return sorted.map((bucket) => {
-    runningBalance += bucket.totalRequiredDeposits + bucket.additions - bucket.withdrawals;
+    runningBalance += bucket.totalPaidDeposits + bucket.additions - bucket.withdrawals;
     return { ...bucket, endingBalance: runningBalance };
   });
+}
+
+export function monthlyProgressLabel(status: MonthlyProgressStatus) {
+  switch (status) {
+    case 'COMPLETE': return 'Lengkap';
+    case 'OVERPAID': return 'Lebih';
+    case 'INCOMPLETE': return 'Belum Lengkap';
+    default: return 'Belum Mulai';
+  }
 }

@@ -4,28 +4,36 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import type { Member, MonthlyDeposit, OtherMutation } from '@/lib/types';
-import { calculateCurrentMonthStats, calculateMemberMonthStats, calculateTotals } from '@/lib/calculations';
+import { calculateCurrentMonthStats, calculateMemberMonthStats, calculateTotals, monthlyProgressLabel } from '@/lib/calculations';
 import { formatDate, monthLabel, rupiah } from '@/lib/format';
-import { normalizeDepositStatuses, statusBadgeClass } from '@/lib/depositStatus';
+import { depositStatusLabel, normalizeDepositStatuses, statusBadgeClass } from '@/lib/depositStatus';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/ToastProvider';
+import { AppIcon } from '@/components/ui/AppIcon';
 
-function StatCard({ icon, label, value, helper }: { icon: string; label: string; value: string; helper?: string }) {
+function MetricCard({ icon, label, value, helper }: { icon: 'wallet' | 'arrow-down' | 'arrow-up'; label: string; value: string; helper: string }) {
   return (
-    <Card className="relative overflow-hidden ">
-      <div className="absolute -right-5 -top-5 h-20 w-20 rounded-full bg-blue-50" />
-      <div className="relative">
-        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-lg shadow-sm md:mb-4 md:h-11 md:w-11 md:text-xl">{icon}</div>
-        <p className="text-sm font-semibold text-slate-500">{label}</p>
-        <p className="mt-2 text-xl font-bold text-slate-900 md:text-2xl">{value}</p>
-        {helper ? <p className="mt-2 text-xs font-medium text-slate-400">{helper}</p> : null}
+    <Card className="relative overflow-hidden !p-4 md:!p-5">
+      <div className="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-blue-50" />
+      <div className="relative flex items-start gap-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-[#4267d6]">
+          <AppIcon name={icon} size={21} />
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+          <p className="mt-1 truncate text-xl font-bold text-slate-900 md:text-2xl">{value}</p>
+          <p className="mt-1 text-xs font-medium text-slate-400">{helper}</p>
+        </div>
       </div>
     </Card>
   );
+}
+
+function transactionLabel(type: string) {
+  return type === 'Tambah' ? 'Tambah rezeki' : 'Kepakai buat kita';
 }
 
 export default function DashboardPage() {
@@ -39,14 +47,13 @@ export default function DashboardPage() {
     if (showLoading) setLoading(true);
     const [membersResult, depositsResult, mutationsResult] = await Promise.all([
       supabase.from('members').select('*').order('name'),
-      supabase.from('monthly_deposits').select('*, members(*)').order('year').order('month'),
-      supabase.from('other_mutations').select('*').order('mutation_date')
+      supabase.from('monthly_deposits').select('*, members(*)').is('deleted_at', null).order('year').order('month'),
+      supabase.from('other_mutations').select('*').is('deleted_at', null).order('mutation_date')
     ]);
 
     if (showLoading) setLoading(false);
-
     if (membersResult.error || depositsResult.error || mutationsResult.error) {
-      toast({ title: 'Gagal ambil dashboard', message: membersResult.error?.message || depositsResult.error?.message || mutationsResult.error?.message, type: 'error' });
+      toast({ title: 'Gagal memuat beranda', message: membersResult.error?.message || depositsResult.error?.message || mutationsResult.error?.message, type: 'error' });
       return;
     }
 
@@ -57,17 +64,13 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchData();
-
     const channel = supabase
       .channel('dashboard-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'monthly_deposits' }, () => fetchData(false))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'other_mutations' }, () => fetchData(false))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, () => fetchData(false))
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const totals = useMemo(() => calculateTotals(deposits, mutations), [deposits, mutations]);
@@ -75,142 +78,125 @@ export default function DashboardPage() {
   const memberProgress = useMemo(() => calculateMemberMonthStats(members, deposits, currentMonth.year, currentMonth.month), [members, deposits, currentMonth.year, currentMonth.month]);
   const progressWidth = Math.min(currentMonth.progress, 100);
   const recentMutations = mutations.slice().sort((a, b) => b.mutation_date.localeCompare(a.mutation_date)).slice(0, 4);
-  const unpaidThisMonth = memberProgress.filter((item) => item.remaining > 0);
+  const isMonthComplete = currentMonth.status === 'COMPLETE' || currentMonth.status === 'OVERPAID';
 
   if (loading) return <LoadingState />;
 
   return (
     <main>
-      <PageHeader
-        title="Rumah Tabungan Kita"
-        description="Tempat kecil buat lihat usaha kita ngumpulin masa depan bareng."
-      />
+      <PageHeader title="Beranda" description="Ringkasan tabungan Kakak dan Mpip hari ini." />
 
       {members.length === 0 ? (
-        <EmptyState title="Belum ada anggota" description="Jalankan SQL seed supaya data Kakak dan Mpip dibuat otomatis." />
+        <EmptyState title="Belum ada anggota" description="Data Kakak dan Mpip belum tersedia atau belum terhubung ke household ini." />
       ) : (
         <>
-          <section className="mb-5 grid gap-5 lg:grid-cols-[1.35fr_0.65fr]">
-            <Card className="relative overflow-hidden p-6 md:p-8">
-              <div className="absolute -right-16 -top-16 h-52 w-52 rounded-full bg-blush-100/70" />
-              <div className="absolute -bottom-20 right-24 h-56 w-56 rounded-full bg-skysoft-100/80" />
+          <section className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
+            <Card className="relative overflow-hidden !bg-[#4267d6] !p-6 text-white md:!p-8">
+              <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/10" />
+              <div className="absolute -bottom-28 left-1/3 h-64 w-64 rounded-full bg-white/5" />
               <div className="relative">
-                <p className="inline-flex rounded-full bg-white/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-white">
-                  Saldo Sekarang
-                </p>
-                <h2 className="mt-4 text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">{rupiah(totals.balance)}</h2>
-                <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-stone-500">
-                  Saldo dihitung dari semua setoran masuk + mutasi tambah - penarikan.
-                </p>
-                <div className="mt-6 grid grid-cols-2 gap-3">
-                  <Link href="/deposits">
-                    <Button className="w-full">Nabung</Button>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/70">Total saldo</p>
+                <h2 className="mt-3 text-4xl font-bold tracking-tight md:text-5xl">{rupiah(totals.balance)}</h2>
+                <p className="mt-3 max-w-xl text-sm font-medium leading-6 text-white/75">Semua setoran dan cerita uang kita sudah dihitung otomatis.</p>
+                <div className="mt-6 grid grid-cols-2 gap-3 sm:max-w-md">
+                  <Link href="/deposits" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-semibold text-[#3557bf] transition hover:bg-blue-50 focus:outline-none focus:ring-4 focus:ring-white/30">
+                    <AppIcon name="wallet" size={19} /> Catat setoran
                   </Link>
-                  <Link href="/mutations">
-                    <Button variant="secondary" className="w-full">Cerita uang</Button>
+                  <Link href="/mutations" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white/15 px-4 text-sm font-semibold text-white ring-1 ring-white/25 transition hover:bg-white/25 focus:outline-none focus:ring-4 focus:ring-white/30">
+                    <AppIcon name="plus" size={19} /> Tulis cerita
                   </Link>
                 </div>
               </div>
             </Card>
 
-            <Card>
-              <p className="text-sm font-semibold text-slate-500">Status perjuangan {monthLabel(currentMonth.year, currentMonth.month)}</p>
-              <div className="mt-4 flex items-center justify-between gap-3">
+            <Card className="!p-5 md:!p-6">
+              <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-2xl font-bold text-slate-900">{currentMonth.progress}%</p>
-                  <p className="mt-1 text-xs font-medium text-slate-400">{rupiah(currentMonth.paid)} / {rupiah(currentMonth.target)}</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Target bulan ini</p>
+                  <h2 className="mt-1 text-lg font-bold text-slate-900">{monthLabel(currentMonth.year, currentMonth.month)}</h2>
                 </div>
-                <span
-                  className={`badge ${
-                    currentMonth.status === 'Kompak'
-                      ? 'bg-white text-[#3557bf] ring-1 ring-white/50'
-                      : currentMonth.status === 'Lebih manis'
-                        ? 'bg-white/80 text-[#3557bf] ring-1 ring-white/50'
-                        : 'bg-amber-100 text-amber-700 ring-1 ring-amber-200'
-                  }`}
-                >
-                  {currentMonth.status}
-                </span>
+                <span className={`badge ${isMonthComplete ? 'bg-blue-100 text-[#3557bf]' : 'bg-amber-100 text-amber-700'}`}>{monthlyProgressLabel(currentMonth.status)}</span>
               </div>
-              <div className="mt-5 h-4 overflow-hidden rounded-full bg-white">
-                <div className="h-full rounded-full bg-gradient-to-r from-blush-300 via-creamsoft-200 to-skysoft-300 transition-all" style={{ width: `${progressWidth}%` }} />
+              <div className="mt-5 flex items-end justify-between gap-3">
+                <div>
+                  <p className="text-3xl font-bold text-slate-900">{currentMonth.progress}%</p>
+                  <p className="mt-1 text-xs font-medium text-slate-400">{rupiah(currentMonth.paid)} dari {rupiah(currentMonth.target)}</p>
+                </div>
+                <p className={`text-right text-sm font-semibold ${isMonthComplete ? 'text-[#3557bf]' : 'text-amber-700'}`}>
+                  {isMonthComplete ? 'Sudah lengkap' : `Kurang ${rupiah(currentMonth.remaining)}`}
+                </p>
               </div>
-              {unpaidThisMonth.length > 0 ? (
-                <div className="mt-5 rounded-3xl bg-amber-50/80 p-4 text-sm font-semibold text-amber-800">
-                  Masih kurang {rupiah(currentMonth.remaining)} bulan ini.
-                </div>
-              ) : (
-                <div className="mt-5 rounded-3xl bg-blue-50 p-4 text-sm font-medium text-[#3557bf]">
-                  Bulan ini aman, setoran sudah lengkap 💖
-                </div>
-              )}
+              <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
+                <div className="h-full rounded-full bg-[#4267d6] transition-all" style={{ width: `${progressWidth}%` }} />
+              </div>
+              <Link href="/deposits" className="mt-5 inline-flex w-full items-center justify-center rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Lihat detail bulan ini</Link>
             </Card>
           </section>
 
-          <section className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-            <StatCard icon="💰" label="Saldo cinta kita" value={rupiah(totals.balance)} helper="Nabung + tambahan - penarikan" />
-            <StatCard icon="📥" label="Nabung wajib terkumpul" value={rupiah(totals.totalDeposits)} />
-            <StatCard icon="✨" label="Tambahan rezeki" value={rupiah(totals.totalAdditions)} />
-            <StatCard icon="📤" label="Terpakai buat kita" value={rupiah(totals.totalWithdrawals)} />
+          <section className="mt-4 grid gap-3 sm:grid-cols-3">
+            <MetricCard icon="wallet" label="Setoran terkumpul" value={rupiah(totals.totalDeposits)} helper="Total setoran Kakak dan Mpip" />
+            <MetricCard icon="arrow-down" label="Tambah rezeki" value={rupiah(totals.totalAdditions)} helper="Rezeki di luar setoran bulanan" />
+            <MetricCard icon="arrow-up" label="Kepakai buat kita" value={rupiah(totals.totalWithdrawals)} helper="Momen dan kebutuhan bersama" />
           </section>
 
-          <section className="mt-5 grid gap-5 lg:grid-cols-[1fr_420px]">
+          <section className="mt-5 grid gap-5 lg:grid-cols-[1fr_380px]">
             <Card>
-              <div className="mb-5 flex items-center justify-between gap-3">
+              <div className="mb-5 flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-black text-stone-900">Progress Kakak & Mpip</h2>
-                  <p className="mt-1 text-sm font-semibold text-stone-500">Biar kelihatan siapa yang udah setor bulan ini.</p>
+                  <h2 className="text-lg font-bold text-slate-900">Setoran bulan ini</h2>
+                  <p className="mt-1 text-sm font-medium text-slate-500">Status masing-masing anggota.</p>
                 </div>
-                <span className="hidden rounded-full bg-white/80 px-3 py-1 text-xs font-black text-stone-500 sm:inline-flex">
-                  {monthLabel(currentMonth.year, currentMonth.month)}
-                </span>
+                <span className="hidden rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500 sm:inline-flex">{monthLabel(currentMonth.year, currentMonth.month)}</span>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 {memberProgress.map((item) => (
-                  <div key={item.member.id} className="rounded-[1.75rem] border border-white/80 bg-white/60 p-4">
+                  <div key={item.member.id} className="rounded-[1.6rem] border border-slate-100 bg-slate-50/70 p-4">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="badge text-stone-700" style={{ backgroundColor: item.member.color || '#f5f5f4' }}>
-                        {item.member.name}
-                      </span>
-                      <span className={`badge ${statusBadgeClass(item.status)}`}>{item.status}</span>
+                      <span className="badge text-slate-700" style={{ backgroundColor: item.member.color || '#eef2ff' }}>{item.member.name}</span>
+                      <span className={`badge ${statusBadgeClass(item.status)}`}>{depositStatusLabel(item.status)}</span>
                     </div>
                     <div className="mt-4 flex items-end justify-between gap-3">
                       <div>
-                        <p className="text-xs font-black uppercase tracking-wide text-stone-400">Masuk</p>
-                        <p className="mt-1 text-xl font-black text-stone-900">{rupiah(item.paid)}</p>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Sudah masuk</p>
+                        <p className="mt-1 text-xl font-bold text-slate-900">{rupiah(item.paid)}</p>
                       </div>
-                      <p className="text-sm font-semibold text-slate-500">{item.progress}%</p>
+                      <p className="text-sm font-semibold text-[#3557bf]">{item.progress}%</p>
                     </div>
-                    <div className="mt-3 h-3 overflow-hidden rounded-full bg-white">
-                      <div className="h-full rounded-full bg-gradient-to-r from-blush-300 via-creamsoft-200 to-skysoft-300" style={{ width: `${item.progress}%` }} />
+                    <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white">
+                      <div className="h-full rounded-full bg-[#4267d6]" style={{ width: `${item.progress}%` }} />
                     </div>
-                    <div className="mt-3 flex justify-between text-xs font-bold text-stone-500">
-                      <span>Wajib {rupiah(item.required)}</span>
-                      <span>Kurang {rupiah(item.remaining)}</span>
+                    <div className="mt-3 flex justify-between gap-2 text-xs font-medium text-slate-500">
+                      <span>Target {rupiah(item.required)}</span>
+                      <span>{item.remaining > 0 ? `Kurang ${rupiah(item.remaining)}` : 'Lengkap'}</span>
                     </div>
-                    <p className="mt-2 text-xs font-medium text-slate-400">Jatuh tempo: {formatDate(item.deposit?.due_date)}</p>
+                    <p className="mt-2 text-xs font-medium text-slate-400">Jatuh tempo {formatDate(item.deposit?.due_date)}</p>
                   </div>
                 ))}
               </div>
             </Card>
 
             <Card>
-              <h2 className="text-lg font-black text-stone-900">Cerita uang terbaru</h2>
-              <p className="mt-1 text-sm font-semibold text-stone-500">Catatan kecil selain setoran wajib kita.</p>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Cerita terbaru</h2>
+                  <p className="mt-1 text-sm font-medium text-slate-500">Momen uang kita di luar setoran.</p>
+                </div>
+                <Link href="/mutations" className="text-sm font-semibold text-[#3557bf] hover:underline">Lihat semua</Link>
+              </div>
 
               {recentMutations.length === 0 ? (
-                <div className="mt-5 rounded-3xl bg-white/60 p-4 text-sm font-semibold text-stone-500">Belum ada cerita tambahan, tabungan masih aman manis.</div>
+                <div className="mt-5 rounded-3xl bg-slate-50 p-4 text-sm font-medium text-slate-500">Belum ada cerita tambahan.</div>
               ) : (
                 <div className="mt-5 space-y-3">
                   {recentMutations.map((mutation) => (
-                    <div key={mutation.id} className="rounded-3xl bg-white/60 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className={`badge ${mutation.type === 'Tambah' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>{mutation.type}</span>
-                        <span className="text-sm font-black text-stone-900">{rupiah(mutation.amount)}</span>
+                    <div key={mutation.id} className="flex items-start justify-between gap-3 rounded-2xl bg-slate-50 p-3.5">
+                      <div className="min-w-0">
+                        <span className={`badge ${mutation.type === 'Tambah' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>{transactionLabel(mutation.type)}</span>
+                        <p className="mt-2 truncate text-sm font-semibold text-slate-700">{mutation.description || 'Tanpa keterangan'}</p>
+                        <p className="mt-1 text-xs font-medium text-slate-400">{formatDate(mutation.mutation_date)}</p>
                       </div>
-                      <p className="mt-2 text-xs font-medium text-slate-400">{formatDate(mutation.mutation_date)}</p>
-                      <p className="mt-1 line-clamp-2 text-sm font-semibold text-stone-600">{mutation.description || '-'}</p>
+                      <p className={`shrink-0 text-sm font-bold ${mutation.type === 'Tambah' ? 'text-emerald-700' : 'text-rose-700'}`}>{mutation.type === 'Tambah' ? '+' : '-'}{rupiah(mutation.amount)}</p>
                     </div>
                   ))}
                 </div>

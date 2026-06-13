@@ -2,49 +2,155 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
-import type { MonthlyDeposit, OtherMutation } from '@/lib/types';
+import type { Member, MonthlyDeposit, MonthlyRecap, OtherMutation, StoryPhoto } from '@/lib/types';
 import { calculateMonthlyRecaps } from '@/lib/calculations';
-import { currentYearMonth, monthLabel, rupiah } from '@/lib/format';
+import { currentYearMonth, monthLabel, rupiah, shortMonthLabel, toNumber } from '@/lib/format';
 import { normalizeDepositStatuses } from '@/lib/depositStatus';
+import { exportReportExcel } from '@/lib/exportReportExcel';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
+import { AppIcon } from '@/components/ui/AppIcon';
 import { useToast } from '@/components/ui/ToastProvider';
 
-function SummaryCard({ label, value, helper }: { label: string; value: string; helper?: string }) {
+interface MonthTogetherness {
+  key: string;
+  year: number;
+  month: number;
+  completeTogether: boolean;
+  isFuture: boolean;
+  isCurrent: boolean;
+  required: number;
+  paid: number;
+  progress: number;
+  memberStates: Array<{ name: string; complete: boolean }>;
+}
+
+interface TimelineItem {
+  id: string;
+  date: string;
+  kind: 'deposit' | 'story';
+  title: string;
+  description: string;
+  amount: number;
+  photoCount?: number;
+}
+
+function SummaryCard({ label, value, helper, tone = 'blue' }: { label: string; value: string; helper?: string; tone?: 'blue' | 'green' | 'rose' | 'slate' }) {
+  const toneClass = {
+    blue: 'bg-blue-50 text-blue-700',
+    green: 'bg-emerald-50 text-emerald-700',
+    rose: 'bg-rose-50 text-rose-700',
+    slate: 'bg-slate-50 text-slate-700'
+  }[tone];
+
   return (
-    <div className="rounded-[1.5rem] bg-white p-4 shadow-sm">
-      <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{label}</p>
-      <p className="mt-1 text-xl font-bold text-slate-900">{value}</p>
-      {helper ? <p className="mt-1 text-xs font-bold text-slate-400">{helper}</p> : null}
+    <div className="rounded-[1.5rem] border border-slate-100 bg-white p-4 shadow-sm">
+      <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide ${toneClass}`}>{label}</span>
+      <p className="mt-3 text-xl font-bold text-slate-900 md:text-2xl">{value}</p>
+      {helper ? <p className="mt-1 text-xs font-semibold leading-5 text-slate-400">{helper}</p> : null}
     </div>
   );
 }
 
+function BalanceChart({ recaps }: { recaps: MonthlyRecap[] }) {
+  if (!recaps.length) return null;
+
+  const width = 760;
+  const height = 260;
+  const padding = { top: 22, right: 22, bottom: 44, left: 72 };
+  const values = recaps.map((item) => item.endingBalance);
+  const minValue = Math.min(0, ...values);
+  const maxValue = Math.max(...values, 1);
+  const range = Math.max(maxValue - minValue, 1);
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  const x = (index: number) => padding.left + (recaps.length === 1 ? plotWidth / 2 : (index / (recaps.length - 1)) * plotWidth);
+  const y = (value: number) => padding.top + ((maxValue - value) / range) * plotHeight;
+  const points = recaps.map((item, index) => `${x(index)},${y(item.endingBalance)}`).join(' ');
+  const yTicks = [maxValue, minValue + range / 2, minValue];
+  const labelStep = recaps.length > 8 ? Math.ceil(recaps.length / 6) : 1;
+
+  return (
+    <div className="overflow-x-auto pb-1">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Grafik pertumbuhan saldo per bulan" className="min-w-[680px] w-full">
+        <defs>
+          <linearGradient id="balanceArea" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#4267d6" stopOpacity="0.28" />
+            <stop offset="100%" stopColor="#4267d6" stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        {yTicks.map((tick, index) => (
+          <g key={`${tick}-${index}`}>
+            <line x1={padding.left} x2={width - padding.right} y1={y(tick)} y2={y(tick)} stroke="#e2e8f0" strokeDasharray="5 5" />
+            <text x={padding.left - 10} y={y(tick) + 4} textAnchor="end" fontSize="11" fill="#94a3b8">
+              {new Intl.NumberFormat('id-ID', { notation: 'compact', maximumFractionDigits: 1 }).format(tick)}
+            </text>
+          </g>
+        ))}
+        <polygon points={`${padding.left},${height - padding.bottom} ${points} ${width - padding.right},${height - padding.bottom}`} fill="url(#balanceArea)" />
+        <polyline points={points} fill="none" stroke="#4267d6" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+        {recaps.map((item, index) => (
+          <g key={item.key}>
+            <circle cx={x(index)} cy={y(item.endingBalance)} r="5" fill="#ffffff" stroke="#4267d6" strokeWidth="3">
+              <title>{`${monthLabel(item.year, item.month)}: ${rupiah(item.endingBalance)}`}</title>
+            </circle>
+            {index % labelStep === 0 || index === recaps.length - 1 ? (
+              <text x={x(index)} y={height - 16} textAnchor="middle" fontSize="11" fill="#64748b">
+                {shortMonthLabel(item.year, item.month)}
+              </text>
+            ) : null}
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+function monthKey(year: number, month: number) {
+  return `${year}-${String(month).padStart(2, '0')}`;
+}
+
+function monthPosition(year: number, month: number) {
+  return year * 12 + month;
+}
+
+function periodDescription(filterYear: string) {
+  return filterYear === 'all' ? 'Semua periode yang sudah tersimpan' : `Januari–Desember ${filterYear}`;
+}
+
 export default function RecapPage() {
   const { toast } = useToast();
+  const now = currentYearMonth();
+  const [members, setMembers] = useState<Member[]>([]);
   const [deposits, setDeposits] = useState<MonthlyDeposit[]>([]);
   const [mutations, setMutations] = useState<OtherMutation[]>([]);
+  const [photos, setPhotos] = useState<Array<Pick<StoryPhoto, 'mutation_id'>>>([]);
   const [loading, setLoading] = useState(true);
-  const [filterYear, setFilterYear] = useState('all');
+  const [exporting, setExporting] = useState(false);
+  const [filterYear, setFilterYear] = useState(String(now.year));
 
   async function fetchData(showLoading = true) {
     if (showLoading) setLoading(true);
-    const [depositsResult, mutationsResult] = await Promise.all([
-      supabase.from('monthly_deposits').select('*, members(*)').order('year').order('month'),
-      supabase.from('other_mutations').select('*').order('mutation_date')
+    const [membersResult, depositsResult, mutationsResult, photosResult] = await Promise.all([
+      supabase.from('members').select('*').order('name'),
+      supabase.from('monthly_deposits').select('*, members(*)').is('deleted_at', null).order('year').order('month'),
+      supabase.from('other_mutations').select('*').is('deleted_at', null).order('mutation_date'),
+      supabase.from('story_photos').select('mutation_id')
     ]);
     if (showLoading) setLoading(false);
 
-    if (depositsResult.error || mutationsResult.error) {
-      toast({ title: 'Gagal ambil rekap', message: depositsResult.error?.message || mutationsResult.error?.message, type: 'error' });
+    if (membersResult.error || depositsResult.error || mutationsResult.error) {
+      toast({ title: 'Gagal ambil Jejak Kita', message: membersResult.error?.message || depositsResult.error?.message || mutationsResult.error?.message, type: 'error' });
       return;
     }
 
+    setMembers((membersResult.data || []) as Member[]);
     setDeposits(normalizeDepositStatuses((depositsResult.data || []) as MonthlyDeposit[]));
     setMutations((mutationsResult.data || []) as OtherMutation[]);
+    setPhotos(photosResult.error ? [] : ((photosResult.data || []) as Array<Pick<StoryPhoto, 'mutation_id'>>));
   }
 
   useEffect(() => {
@@ -54,6 +160,7 @@ export default function RecapPage() {
       .channel('recap-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'monthly_deposits' }, () => fetchData(false))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'other_mutations' }, () => fetchData(false))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'story_photos' }, () => fetchData(false))
       .subscribe();
 
     return () => {
@@ -63,122 +170,350 @@ export default function RecapPage() {
 
   const recaps = useMemo(() => calculateMonthlyRecaps(deposits, mutations), [deposits, mutations]);
   const years = useMemo(() => {
-    const now = currentYearMonth();
     const set = new Set<number>([2026, now.year]);
     recaps.forEach((recap) => set.add(recap.year));
-    return Array.from(set).sort((a, b) => a - b);
-  }, [recaps]);
-  const filteredRecaps = recaps.filter((recap) => filterYear === 'all' || recap.year === Number(filterYear));
+    return Array.from(set).sort((a, b) => b - a);
+  }, [recaps, now.year]);
 
-  const recapSummary = useMemo(() => {
-    const latest = recaps[recaps.length - 1] || null;
-    const additions = filteredRecaps.reduce((sum, item) => sum + item.additions, 0);
-    const withdrawals = filteredRecaps.reduce((sum, item) => sum + item.withdrawals, 0);
-    const depositsTotal = filteredRecaps.reduce((sum, item) => sum + item.totalRequiredDeposits, 0);
-    return { latest, additions, withdrawals, depositsTotal, count: filteredRecaps.length };
-  }, [recaps, filteredRecaps]);
+  const photoCounts = useMemo(() => {
+    return photos.reduce<Record<string, number>>((accumulator, photo) => {
+      accumulator[photo.mutation_id] = (accumulator[photo.mutation_id] || 0) + 1;
+      return accumulator;
+    }, {});
+  }, [photos]);
+
+  const filteredDeposits = useMemo(
+    () => deposits.filter((item) => filterYear === 'all' || item.year === Number(filterYear)),
+    [deposits, filterYear]
+  );
+  const filteredMutations = useMemo(
+    () => mutations.filter((item) => filterYear === 'all' || new Date(`${item.mutation_date}T00:00:00`).getFullYear() === Number(filterYear)),
+    [mutations, filterYear]
+  );
+  const filteredRecaps = useMemo(
+    () => recaps.filter((recap) => filterYear === 'all' || recap.year === Number(filterYear)),
+    [recaps, filterYear]
+  );
+
+  const togetherness = useMemo<MonthTogetherness[]>(() => {
+    return filteredRecaps.map((recap) => {
+      const monthDeposits = filteredDeposits.filter((deposit) => deposit.year === recap.year && deposit.month === recap.month);
+      const required = monthDeposits.reduce((sum, deposit) => sum + toNumber(deposit.required_amount), 0);
+      const paid = monthDeposits.reduce((sum, deposit) => sum + toNumber(deposit.paid_amount), 0);
+      const memberStates = members.map((member) => {
+        const deposit = monthDeposits.find((entry) => entry.member_id === member.id);
+        return { name: member.name, complete: Boolean(deposit && toNumber(deposit.paid_amount) >= toNumber(deposit.required_amount)) };
+      });
+      const currentPosition = monthPosition(now.year, now.month);
+      const itemPosition = monthPosition(recap.year, recap.month);
+      const isFuture = itemPosition > currentPosition;
+      const completeTogether = members.length > 0 && memberStates.every((state) => state.complete);
+
+      return {
+        key: recap.key,
+        year: recap.year,
+        month: recap.month,
+        completeTogether,
+        isFuture,
+        isCurrent: itemPosition === currentPosition,
+        required,
+        paid,
+        progress: required > 0 ? Math.min(Math.round((paid / required) * 100), 100) : 0,
+        memberStates
+      };
+    });
+  }, [filteredRecaps, filteredDeposits, members, now.month, now.year]);
+
+  const summary = useMemo(() => {
+    const latest = filteredRecaps.at(-1) || null;
+    const additions = filteredMutations.filter((item) => item.type === 'Tambah').reduce((sum, item) => sum + toNumber(item.amount), 0);
+    const withdrawals = filteredMutations.filter((item) => item.type === 'Penarikan').reduce((sum, item) => sum + toNumber(item.amount), 0);
+    const depositsTotal = filteredDeposits.reduce((sum, item) => sum + toNumber(item.paid_amount), 0);
+    const completeMonths = togetherness.filter((item) => item.completeTogether && !item.isFuture).length;
+    const eligibleMonths = togetherness.filter((item) => !item.isFuture).length;
+    const netChange = depositsTotal + additions - withdrawals;
+    const totalPhotos = filteredMutations.reduce((sum, item) => sum + (photoCounts[item.id] || 0), 0);
+
+    const eligible = togetherness.filter((item) => !item.isFuture).sort((a, b) => a.year - b.year || a.month - b.month);
+    let streak = 0;
+    for (let index = eligible.length - 1; index >= 0; index -= 1) {
+      if (!eligible[index].completeTogether) break;
+      streak += 1;
+    }
+
+    return { latest, additions, withdrawals, depositsTotal, completeMonths, eligibleMonths, netChange, totalPhotos, streak };
+  }, [filteredRecaps, filteredMutations, filteredDeposits, togetherness, photoCounts]);
+
+  const insights = useMemo(() => {
+    const items: string[] = [];
+    if (summary.completeMonths > 0) items.push(`${summary.completeMonths} bulan sudah lengkap bersama—masing-masing memenuhi target pribadinya.`);
+    if (summary.streak > 1) items.push(`Kalian sedang menjaga ritme ${summary.streak} bulan lengkap berturut-turut ❤️`);
+    if (summary.netChange > 0) items.push(`Saldo bertambah ${rupiah(summary.netChange)} selama periode ini.`);
+    if (summary.totalPhotos > 0) items.push(`${summary.totalPhotos} foto kenangan tersimpan di album Cerita selama periode ini.`);
+    const biggestStory = [...filteredMutations].filter((item) => item.type === 'Penarikan').sort((a, b) => toNumber(b.amount) - toNumber(a.amount))[0];
+    if (biggestStory) items.push(`Momen dengan nominal terbesar: “${biggestStory.description || 'Cerita kita'}” sebesar ${rupiah(biggestStory.amount)}.`);
+    if (!items.length) items.push('Jejak kalian akan mulai terbentuk setelah setoran atau Cerita pertama dicatat.');
+    return items.slice(0, 4);
+  }, [summary, filteredMutations]);
+
+  const storyHighlights = useMemo(() => {
+    return [...filteredMutations]
+      .sort((a, b) => {
+        const photoDifference = (photoCounts[b.id] || 0) - (photoCounts[a.id] || 0);
+        if (photoDifference !== 0) return photoDifference;
+        return b.mutation_date.localeCompare(a.mutation_date);
+      })
+      .slice(0, 3);
+  }, [filteredMutations, photoCounts]);
+
+  const timeline = useMemo<TimelineItem[]>(() => {
+    const depositItems = filteredDeposits
+      .filter((deposit) => toNumber(deposit.paid_amount) > 0)
+      .map((deposit) => ({
+        id: `deposit-${deposit.id}`,
+        date: deposit.actual_transfer_date || deposit.due_date,
+        kind: 'deposit' as const,
+        title: `${deposit.members?.name || 'Salah satu dari kita'} menabung`,
+        description: `Setoran ${monthLabel(deposit.year, deposit.month)} sudah dicatat.`,
+        amount: toNumber(deposit.paid_amount)
+      }));
+
+    const storyItems = filteredMutations.map((mutation) => ({
+      id: `story-${mutation.id}`,
+      date: mutation.mutation_date,
+      kind: 'story' as const,
+      title: mutation.description || (mutation.type === 'Tambah' ? 'Tambah rezeki' : 'Cerita kita'),
+      description: mutation.type === 'Tambah' ? 'Tambah rezeki untuk tabungan bersama.' : 'Kepakai buat momen atau kebutuhan kita.',
+      amount: toNumber(mutation.amount),
+      photoCount: photoCounts[mutation.id] || 0
+    }));
+
+    return [...depositItems, ...storyItems].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10);
+  }, [filteredDeposits, filteredMutations, photoCounts]);
+
+  async function handleExport() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      await exportReportExcel({ members, deposits, mutations, recaps, filterYear, photoCounts });
+      toast({ title: 'Excel berhasil dibuat', message: 'Jejak Kita sudah diunduh dengan format tracker tabungan bersama.', type: 'success' });
+    } catch (error) {
+      toast({ title: 'Gagal membuat Excel', message: error instanceof Error ? error.message : 'Coba lagi beberapa saat.', type: 'error' });
+    } finally {
+      setExporting(false);
+    }
+  }
 
   if (loading) return <LoadingState />;
 
   return (
     <main>
       <PageHeader
-        title="Jejak Tabungan Kita"
-        description="Lihat perjalanan tabungan Kakak & Mpip dari bulan ke bulan."
+        title="Jejak Kita"
+        description="Perjalanan tabungan, cerita, dan kekompakan kita—tanpa membandingkan siapa yang menyetor lebih besar."
+        action={
+          <Button type="button" variant="secondary" onClick={handleExport} disabled={exporting} className="gap-2">
+            <AppIcon name="arrow-down" size={18} />
+            {exporting ? 'Menyiapkan Excel...' : 'Export Excel'}
+          </Button>
+        }
       />
 
-      <Card>
-        <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard label="Saldo cinta terakhir" value={rupiah(recapSummary.latest?.endingBalance || 0)} helper={recapSummary.latest ? monthLabel(recapSummary.latest.year, recapSummary.latest.month) : 'Belum ada'} />
-          <SummaryCard label="Setoran masuk" value={rupiah(recapSummary.depositsTotal)} helper="Sesuai filter" />
-          <SummaryCard label="Tambahan rezeki" value={rupiah(recapSummary.additions)} helper="Sesuai filter" />
-          <SummaryCard label="Kepakai" value={rupiah(recapSummary.withdrawals)} helper={`${recapSummary.count} bulan`} />
+      <Card className="overflow-hidden">
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-500">Periode laporan</p>
+            <p className="mt-1 text-lg font-bold text-slate-900">{periodDescription(filterYear)}</p>
+            <p className="mt-1 max-w-2xl text-sm font-medium leading-6 text-slate-500">Target Kakak dan Mpip mengikuti 3% dari gaji masing-masing. Laporan menilai komitmen terhadap target pribadi, bukan membandingkan nominal.</p>
+          </div>
+          <div className="flex w-full gap-2 md:w-auto">
+            <select aria-label="Pilih tahun laporan" className="form-input min-w-0 md:w-44" value={filterYear} onChange={(event) => setFilterYear(event.target.value)}>
+              <option value="all">Semua periode</option>
+              {years.map((year) => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+            <Button type="button" variant="ghost" onClick={() => setFilterYear(String(now.year))}>Tahun ini</Button>
+          </div>
         </div>
 
-        <div className="mb-5 flex flex-col gap-3 sm:max-w-md sm:flex-row">
-          <select className="form-input" value={filterYear} onChange={(event) => setFilterYear(event.target.value)}>
-            <option value="all">Semua tahun</option>
-            {years.map((year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
-            ))}
-          </select>
-          <Button type="button" variant="secondary" onClick={() => setFilterYear('all')}>
-            Reset
-          </Button>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <SummaryCard label="Saldo akhir" value={rupiah(summary.latest?.endingBalance || 0)} helper={summary.latest ? `Sampai ${monthLabel(summary.latest.year, summary.latest.month)}` : 'Belum ada data'} tone="blue" />
+          <SummaryCard label="Setoran terkumpul" value={rupiah(summary.depositsTotal)} helper="Gabungan target pribadi yang sudah masuk" tone="green" />
+          <SummaryCard label="Tambah rezeki" value={rupiah(summary.additions)} helper="Di luar setoran rutin" tone="slate" />
+          <SummaryCard label="Kepakai buat kita" value={rupiah(summary.withdrawals)} helper="Untuk Cerita dan kebutuhan bersama" tone="rose" />
         </div>
+      </Card>
 
-        {filteredRecaps.length === 0 ? (
-          <EmptyState title="Belum ada jejak tabungan" description="Generate setoran atau tambah mutasi dulu supaya rekap muncul." />
-        ) : (
-          <>
-            <div className="grid gap-3 md:hidden">
-              {filteredRecaps.map((recap) => (
-                <div key={recap.key} className="mobile-data-card">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-lg font-bold text-slate-900">{monthLabel(recap.year, recap.month)}</p>
-                      <p className="mt-1 text-xs font-bold text-slate-400">Saldo akhir bulan</p>
-                    </div>
-                    <p className="text-lg font-bold text-slate-900">{rupiah(recap.endingBalance)}</p>
+      {filteredRecaps.length === 0 ? (
+        <Card>
+          <EmptyState title="Jejaknya belum terbentuk" description="Catat setoran atau tulis Cerita terlebih dahulu agar laporan mulai tumbuh." />
+        </Card>
+      ) : (
+        <>
+          <Card>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-500">Perjalanan saldo</p>
+                <h2 className="mt-1 text-xl font-bold text-slate-900">Tumbuh pelan-pelan, tetap bersama</h2>
+              </div>
+              <p className={`text-sm font-bold ${summary.netChange >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                Perubahan periode: {summary.netChange >= 0 ? '+' : ''}{rupiah(summary.netChange)}
+              </p>
+            </div>
+            <div className="mt-5 rounded-[24px] bg-slate-50 p-3 md:p-5">
+              <BalanceChart recaps={filteredRecaps} />
+            </div>
+          </Card>
+
+          <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
+            <Card>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-500">Kekompakan kita</p>
+              <h2 className="mt-1 text-xl font-bold text-slate-900">Target pribadi, dirayakan bersama</h2>
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-3xl bg-blue-50 p-4">
+                  <p className="text-3xl font-black text-blue-700">{summary.completeMonths}</p>
+                  <p className="mt-1 text-sm font-bold text-slate-700">bulan lengkap bersama</p>
+                </div>
+                <div className="rounded-3xl bg-emerald-50 p-4">
+                  <p className="text-3xl font-black text-emerald-700">{summary.streak}</p>
+                  <p className="mt-1 text-sm font-bold text-slate-700">streak lengkap saat ini</p>
+                </div>
+                <div className="rounded-3xl bg-slate-50 p-4">
+                  <p className="text-3xl font-black text-slate-700">{summary.eligibleMonths}</p>
+                  <p className="mt-1 text-sm font-bold text-slate-700">bulan yang sudah dijalani</p>
+                </div>
+              </div>
+              <div className="mt-4 rounded-3xl border border-blue-100 bg-blue-50/60 p-4">
+                <p className="text-sm font-bold text-blue-800">Cara bacanya</p>
+                <p className="mt-1 text-sm font-medium leading-6 text-slate-600">Satu bulan disebut lengkap ketika Kakak dan Mpip sama-sama memenuhi target pribadinya. Nominalnya memang berbeda karena mengikuti 3% dari gaji masing-masing.</p>
+              </div>
+            </Card>
+
+            <Card>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-500">Catatan kecil</p>
+              <h2 className="mt-1 text-xl font-bold text-slate-900">Yang terjadi di periode ini</h2>
+              <div className="mt-4 space-y-3">
+                {insights.map((insight, index) => (
+                  <div key={insight} className="flex gap-3 rounded-2xl bg-slate-50 p-3.5">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-xs font-black text-blue-600 shadow-sm">{index + 1}</span>
+                    <p className="text-sm font-semibold leading-6 text-slate-600">{insight}</p>
                   </div>
-                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                    <div className="rounded-2xl bg-blush-100/80 p-3">
-                      <p className="text-xs font-bold uppercase text-blush-500">Mpip</p>
-                      <p className="font-bold text-stone-800">{rupiah(recap.mpipDeposit)}</p>
+                ))}
+              </div>
+            </Card>
+          </div>
+
+          {storyHighlights.length > 0 ? (
+            <Card>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-500">Cerita kita</p>
+                <h2 className="mt-1 text-xl font-bold text-slate-900">Momen yang ikut membentuk perjalanan</h2>
+              </div>
+              <div className="mt-5 grid gap-3 md:grid-cols-3">
+                {storyHighlights.map((story) => (
+                  <div key={story.id} className="rounded-[24px] border border-slate-100 bg-slate-50 p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={`badge ${story.type === 'Tambah' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>{story.type === 'Tambah' ? 'Tambah rezeki' : 'Kepakai buat kita'}</span>
+                      <span className="text-xs font-bold text-slate-400">{new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(`${story.mutation_date}T00:00:00`))}</span>
                     </div>
-                    <div className="rounded-2xl bg-skysoft-100/80 p-3">
-                      <p className="text-xs font-bold uppercase text-sky-400">Kakak</p>
-                      <p className="font-bold text-sky-700">{rupiah(recap.kakakDeposit)}</p>
-                    </div>
-                    <div className="rounded-2xl bg-skysoft-100/80 p-3">
-                      <p className="text-xs font-bold uppercase text-skysoft-500">Tambah</p>
-                      <p className="font-bold text-stone-800">{rupiah(recap.additions)}</p>
-                    </div>
-                    <div className="rounded-2xl bg-blush-100/80 p-3">
-                      <p className="text-xs font-bold uppercase text-blush-500">Tarik</p>
-                      <p className="font-bold text-stone-800">{rupiah(recap.withdrawals)}</p>
+                    <h3 className="mt-3 line-clamp-2 text-base font-bold text-slate-900">{story.description || 'Cerita kita'}</h3>
+                    <p className="mt-2 text-lg font-black text-slate-800">{rupiah(story.amount)}</p>
+                    <div className="mt-3 flex items-center gap-2 text-xs font-bold text-slate-500">
+                      <AppIcon name="image" size={16} />
+                      {photoCounts[story.id] || 0} foto tersimpan
                     </div>
                   </div>
-                  <div className="mt-3 rounded-2xl palette-card p-3 text-sm font-bold text-slate-700">
-                    Setoran terkumpul masuk: {rupiah(recap.totalRequiredDeposits)}
+                ))}
+              </div>
+            </Card>
+          ) : null}
+
+          <Card>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-500">Ringkasan bulanan</p>
+              <h2 className="mt-1 text-xl font-bold text-slate-900">Setiap bulan punya ceritanya sendiri</h2>
+            </div>
+            <div className="mt-5 space-y-3">
+              {filteredRecaps.map((recap) => {
+                const state = togetherness.find((item) => item.key === recap.key);
+                const status = state?.isFuture ? 'Belum waktunya' : state?.completeTogether ? 'Lengkap bersama ❤️' : state?.isCurrent ? 'Masih berjalan' : 'Masih dalam perjalanan';
+                const net = recap.totalPaidDeposits + recap.additions - recap.withdrawals;
+                return (
+                  <details key={recap.key} className="group rounded-[22px] border border-slate-100 bg-white shadow-sm">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-4 focus:outline-none focus:ring-4 focus:ring-blue-100 [&::-webkit-details-marker]:hidden">
+                      <div>
+                        <p className="font-bold text-slate-900">{monthLabel(recap.year, recap.month)}</p>
+                        <p className="mt-1 text-xs font-bold text-slate-400">{status}</p>
+                      </div>
+                      <div className="flex items-center gap-3 text-right">
+                        <div>
+                          <p className={`font-bold ${net >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{net >= 0 ? '+' : ''}{rupiah(net)}</p>
+                          <p className="text-xs font-semibold text-slate-400">perubahan bulan</p>
+                        </div>
+                        <AppIcon name="chevron-right" size={19} className="transition group-open:rotate-90" />
+                      </div>
+                    </summary>
+                    <div className="border-t border-slate-100 px-4 pb-4 pt-3">
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="rounded-2xl bg-blue-50 p-3"><p className="text-xs font-bold text-blue-500">Setoran masuk</p><p className="mt-1 font-bold text-slate-800">{rupiah(recap.totalPaidDeposits)}</p></div>
+                        <div className="rounded-2xl bg-emerald-50 p-3"><p className="text-xs font-bold text-emerald-600">Tambah rezeki</p><p className="mt-1 font-bold text-slate-800">{rupiah(recap.additions)}</p></div>
+                        <div className="rounded-2xl bg-rose-50 p-3"><p className="text-xs font-bold text-rose-600">Kepakai buat kita</p><p className="mt-1 font-bold text-slate-800">{rupiah(recap.withdrawals)}</p></div>
+                        <div className="rounded-2xl bg-slate-50 p-3"><p className="text-xs font-bold text-slate-500">Saldo akhir</p><p className="mt-1 font-bold text-slate-800">{rupiah(recap.endingBalance)}</p></div>
+                      </div>
+                      {state ? (
+                        <div className="mt-3 rounded-2xl bg-slate-50 p-3">
+                          <div className="flex items-center justify-between gap-3 text-xs font-bold text-slate-500">
+                            <span>Progress target bersama</span><span>{state.progress}%</span>
+                          </div>
+                          <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-[#4267d6]" style={{ width: `${state.progress}%` }} /></div>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {state.memberStates.map((memberState) => (
+                              <span key={memberState.name} className={`badge ${memberState.complete ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
+                                {memberState.name}: {memberState.complete ? 'target pribadi terpenuhi' : 'masih proses'}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </details>
+                );
+              })}
+            </div>
+          </Card>
+
+          <Card>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-500">Semua jejak</p>
+              <h2 className="mt-1 text-xl font-bold text-slate-900">Setoran dan Cerita dalam satu perjalanan</h2>
+            </div>
+            <div className="mt-5 space-y-1">
+              {timeline.map((item, index) => (
+                <div key={item.id} className="relative flex gap-4 pb-5 last:pb-0">
+                  {index < timeline.length - 1 ? <div className="absolute left-[17px] top-8 h-[calc(100%-1.25rem)] w-px bg-slate-200" /> : null}
+                  <div className={`relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${item.kind === 'deposit' ? 'bg-blue-100 text-blue-700' : 'bg-rose-100 text-rose-700'}`}>
+                    <AppIcon name={item.kind === 'deposit' ? 'wallet' : 'heart'} size={17} />
+                  </div>
+                  <div className="min-w-0 flex-1 rounded-2xl bg-slate-50 p-3.5">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="font-bold text-slate-900">{item.title}</p>
+                        <p className="mt-1 text-sm font-medium leading-5 text-slate-500">{item.description}</p>
+                      </div>
+                      <div className="shrink-0 sm:text-right">
+                        <p className="font-bold text-slate-800">{rupiah(item.amount)}</p>
+                        <p className="text-xs font-semibold text-slate-400">{new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(`${item.date}T00:00:00`))}</p>
+                      </div>
+                    </div>
+                    {item.photoCount ? <p className="mt-2 flex items-center gap-1.5 text-xs font-bold text-slate-500"><AppIcon name="image" size={15} />{item.photoCount} foto di album</p> : null}
                   </div>
                 </div>
               ))}
             </div>
-
-            <div className="hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[980px] overflow-hidden rounded-3xl bg-white/75">
-                <thead className="bg-white/90">
-                  <tr>
-                    <th className="table-th">Bulan</th>
-                    <th className="table-th">Setoran Mpip</th>
-                    <th className="table-th">Setoran Kakak</th>
-                    <th className="table-th">Setoran wajib masuk</th>
-                    <th className="table-th">Tambahan rezeki</th>
-                    <th className="table-th">Kepakai</th>
-                    <th className="table-th">Saldo akhir</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white">
-                  {filteredRecaps.map((recap) => (
-                    <tr key={recap.key}>
-                      <td className="table-td font-bold">{monthLabel(recap.year, recap.month)}</td>
-                      <td className="table-td font-bold text-stone-800">{rupiah(recap.mpipDeposit)}</td>
-                      <td className="table-td font-bold text-sky-700">{rupiah(recap.kakakDeposit)}</td>
-                      <td className="table-td font-bold">{rupiah(recap.totalRequiredDeposits)}</td>
-                      <td className="table-td font-bold text-stone-800">{rupiah(recap.additions)}</td>
-                      <td className="table-td font-bold text-stone-800">{rupiah(recap.withdrawals)}</td>
-                      <td className="table-td font-bold">{rupiah(recap.endingBalance)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-      </Card>
+          </Card>
+        </>
+      )}
     </main>
   );
 }

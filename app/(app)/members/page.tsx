@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import type { Member, MonthlyDeposit } from '@/lib/types';
 import { rupiah, safeDueDate } from '@/lib/format';
@@ -11,6 +12,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/ToastProvider';
+import { RupiahInput } from '@/components/ui/RupiahInput';
 
 const DEFAULT_MEMBER_NAMES = ['Mpip', 'Kakak'];
 
@@ -30,17 +32,17 @@ function sortDefaultMembers(a: Member, b: Member) {
   return DEFAULT_MEMBER_NAMES.indexOf(a.name) - DEFAULT_MEMBER_NAMES.indexOf(b.name);
 }
 
-function MemberBigCard({ member, onEdit }: { member: Member; onEdit: (member: Member) => void }) {
+function MemberBigCard({ member, onEdit, canEdit }: { member: Member; onEdit: (member: Member) => void; canEdit: boolean }) {
   return (
     <div className="relative overflow-hidden rounded-[2rem] border border-slate-100 bg-white/90 p-5 shadow-sm">
       <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full opacity-70" style={{ backgroundColor: member.color || (member.name === 'Mpip' ? '#E3A2C8' : '#A4BBE0') }} />
       <div className="relative">
         <span className="badge text-slate-700" style={{ backgroundColor: member.color || (member.name === 'Mpip' ? '#E3A2C8' : '#A4BBE0') }}>{member.name}</span>
-        <p className="mt-5 text-xs font-bold uppercase tracking-wide text-slate-400">Setoran sayang</p>
+        <p className="mt-5 text-xs font-bold uppercase tracking-wide text-slate-400">Target setoran</p>
         <p className="mt-1 text-3xl font-bold text-slate-900">{rupiah(member.monthly_amount)}</p>
         <p className="mt-2 text-sm font-bold text-slate-500">Setor tiap tanggal {member.payday}</p>
-        <Button type="button" variant="secondary" className="mt-5" onClick={() => onEdit(member)}>
-          Atur
+        <Button type="button" variant="secondary" className="mt-5" onClick={() => onEdit(member)} disabled={!canEdit}>
+          {canEdit ? 'Atur' : 'Lihat saja'}
         </Button>
       </div>
     </div>
@@ -50,6 +52,7 @@ function MemberBigCard({ member, onEdit }: { member: Member; onEdit: (member: Me
 export default function MembersPage() {
   const { toast } = useToast();
   const [members, setMembers] = useState<Member[]>([]);
+  const [currentUserId, setCurrentUserId] = useState('');
   const [form, setForm] = useState<MemberForm>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [syncUnpaid, setSyncUnpaid] = useState(true);
@@ -61,19 +64,26 @@ export default function MembersPage() {
 
   async function fetchMembers(showLoading = true) {
     if (showLoading) setLoading(true);
-    const { data, error } = await supabase
-      .from('members')
-      .select('*')
-      .in('name', DEFAULT_MEMBER_NAMES)
-      .order('name');
+
+    const { data: userResult, error: userError } = await supabase.auth.getUser();
+    const userId = userResult.user?.id;
+    if (userError || !userId) {
+      if (showLoading) setLoading(false);
+      toast({ title: 'Sesi tidak ditemukan', message: userError?.message || 'Silakan login ulang.', type: 'error' });
+      return;
+    }
+
+    const memberResult = await supabase.from('members').select('*').in('name', DEFAULT_MEMBER_NAMES).order('name');
     if (showLoading) setLoading(false);
 
+    const error = memberResult.error;
     if (error) {
       toast({ title: 'Gagal ambil anggota', message: error.message, type: 'error' });
       return;
     }
 
-    setMembers(((data || []) as Member[]).sort(sortDefaultMembers));
+    setCurrentUserId(userId);
+    setMembers(((memberResult.data || []) as Member[]).sort(sortDefaultMembers));
   }
 
   useEffect(() => {
@@ -89,7 +99,15 @@ export default function MembersPage() {
     };
   }, []);
 
+  function canManageMember(member: Member | null | undefined) {
+    return Boolean(member && member.auth_user_id === currentUserId);
+  }
+
   function startEdit(member: Member) {
+    if (!canManageMember(member)) {
+      toast({ title: 'Pengaturan hanya bisa dilihat', message: `Akun ini tidak punya izin mengubah pengaturan ${member.name}.`, type: 'info' });
+      return;
+    }
     setEditingId(member.id);
     setForm({
       monthly_amount: Number(member.monthly_amount),
@@ -110,6 +128,7 @@ export default function MembersPage() {
       .from('monthly_deposits')
       .select('*')
       .eq('member_id', memberId)
+      .is('deleted_at', null)
       .lte('paid_amount', 0);
 
     if (error) throw error;
@@ -147,6 +166,10 @@ export default function MembersPage() {
     event.preventDefault();
 
     if (!editingId) return;
+    if (!canManageMember(editingMember)) {
+      toast({ title: 'Akses ditolak', message: 'Pengaturan anggota ini tidak boleh diubah oleh akun yang sedang login.', type: 'error' });
+      return;
+    }
 
     const monthlyAmount = Number(form.monthly_amount);
     const payday = Number(form.payday);
@@ -167,7 +190,7 @@ export default function MembersPage() {
     }
 
     if (!/^#[0-9A-F]{6}$/i.test(form.color)) {
-      toast({ title: 'Warna label kesayangan belum valid', message: 'Gunakan format warna HEX, contoh #E3A2C8.', type: 'error' });
+      toast({ title: 'Warna profil belum valid', message: 'Gunakan format warna HEX, contoh #E3A2C8.', type: 'error' });
       return;
     }
 
@@ -209,27 +232,32 @@ export default function MembersPage() {
   return (
     <main>
       <PageHeader
-        title="Setting Kakak & Mpip"
-        description="Atur nominal, tanggal setor, dan warna label biar tabungan cinta kita makin rapi."
+        title="Pengaturan"
+        description="Atur target setoran, tanggal jatuh tempo, dan warna profil milikmu."
+        action={<Link href="/archive" className="inline-flex rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Arsip & audit</Link>}
       />
+
+      <div className="mb-5 rounded-3xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-semibold text-[#3557bf]">
+        Kakak dan Mpip hanya bisa mengubah pengaturan milik akun masing-masing. Data pasangan tetap bisa dilihat.
+      </div>
 
       {members.length < 2 ? (
         <div className="mb-5">
           <EmptyState
             title="Data Kakak/Mpip belum lengkap"
-            description="Jalankan supabase/schema.sql dulu supaya data default Kakak dan Mpip otomatis dibuat."
+            description="Data Kakak dan Mpip belum tersedia atau belum terhubung ke household ini."
           />
         </div>
       ) : null}
 
       <div className="mb-5 grid gap-4 md:grid-cols-3">
         <Card>
-          <p className="text-sm font-bold text-slate-500">Target cinta bulanan</p>
+          <p className="text-sm font-bold text-slate-500">Target bulanan bersama</p>
           <p className="mt-2 text-3xl font-bold text-slate-900">{rupiah(monthlyTarget)}</p>
           <p className="mt-1 text-xs font-bold text-slate-400">Total setoran wajib kita berdua</p>
         </Card>
         {members.map((member) => (
-          <MemberBigCard key={member.id} member={member} onEdit={startEdit} />
+          <MemberBigCard key={member.id} member={member} onEdit={startEdit} canEdit={canManageMember(member)} />
         ))}
       </div>
 
@@ -243,23 +271,23 @@ export default function MembersPage() {
           {editingMember ? (
             <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
               <div>
-                <label className="form-label">Nama sayang</label>
-                <input className="form-input mt-2 bg-stone-100 text-slate-500" value={editingMember.name} disabled />
+                <label className="form-label" htmlFor="member-name">Nama anggota</label>
+                <input id="member-name" className="form-input mt-2 bg-stone-100 text-slate-500" value={editingMember.name} disabled />
               </div>
               <div>
-                <label className="form-label">Nominal setoran</label>
-                <input
-                  className="form-input mt-2"
-                  type="number"
+                <label className="form-label" htmlFor="member-monthly-amount">Nominal setoran</label>
+                <RupiahInput
+                  id="member-monthly-amount"
+                  className="mt-2"
                   value={form.monthly_amount}
-                  onChange={(event) => setForm({ ...form, monthly_amount: Number(event.target.value) })}
-                  min={1}
+                  onValueChange={(value) => setForm({ ...form, monthly_amount: value })}
+                  placeholder="0"
                 />
-                <p className="mt-1 text-xs font-bold text-slate-500">Preview: {rupiah(form.monthly_amount)}</p>
               </div>
               <div>
-                <label className="form-label">Tanggal setor</label>
+                <label className="form-label" htmlFor="member-payday">Tanggal setor</label>
                 <input
+                  id="member-payday"
                   className="form-input mt-2"
                   type="number"
                   value={form.payday}
@@ -269,15 +297,17 @@ export default function MembersPage() {
                 />
               </div>
               <div>
-                <label className="form-label">Warna label kesayangan</label>
+                <label className="form-label" htmlFor="member-color-picker">Warna profil</label>
                 <div className="mt-2 flex gap-3">
                   <input
+                    id="member-color-picker"
+                    aria-label="Pilih warna anggota"
                     className="h-12 w-16 cursor-pointer rounded-2xl border border-white bg-white p-1 shadow-sm"
                     type="color"
                     value={form.color}
                     onChange={(event) => setForm({ ...form, color: event.target.value })}
                   />
-                  <input className="form-input" value={form.color} onChange={(event) => setForm({ ...form, color: event.target.value })} />
+                  <input aria-label="Kode warna HEX" className="form-input" value={form.color} onChange={(event) => setForm({ ...form, color: event.target.value })} />
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {['#E3A2C8', '#DFB2CB', '#D9D8D3', '#B4C6E2', '#A4BBE0'].map((paletteColor) => (
@@ -306,7 +336,7 @@ export default function MembersPage() {
                   {saving ? 'Menyimpan...' : 'Simpan'}
                 </Button>
                 <Button type="button" variant="secondary" onClick={cancelEdit} className="w-full sm:w-auto">
-                  Nanti dulu
+                  Batal
                 </Button>
               </div>
             </form>
@@ -319,7 +349,7 @@ export default function MembersPage() {
 
         <Card>
           {members.length === 0 ? (
-            <EmptyState title="Data Kakak/Mpip belum ada" description="Jalankan SQL seed dulu supaya data Kakak dan Mpip muncul." />
+            <EmptyState title="Data Kakak/Mpip belum ada" description="Data Kakak dan Mpip belum tersedia atau belum terhubung ke household ini." />
           ) : (
             <>
               <div className="grid gap-3 md:hidden">
@@ -332,8 +362,8 @@ export default function MembersPage() {
                     <p className="mt-4 text-xs font-bold uppercase tracking-wide text-slate-400">Nominal wajib</p>
                     <p className="mt-1 text-2xl font-bold text-slate-900">{rupiah(member.monthly_amount)}</p>
                     <p className="mt-2 text-sm font-bold text-slate-500">Setor tanggal {member.payday}</p>
-                    <Button type="button" variant="secondary" className="mt-4 w-full" onClick={() => startEdit(member)}>
-                      Edit
+                    <Button type="button" variant="secondary" className="mt-4 w-full" onClick={() => startEdit(member)} disabled={!canManageMember(member)}>
+                      {canManageMember(member) ? 'Edit' : 'Lihat saja'}
                     </Button>
                   </div>
                 ))}
@@ -343,7 +373,7 @@ export default function MembersPage() {
                 <table className="w-full min-w-[720px] overflow-hidden rounded-3xl bg-white/75">
                   <thead className="bg-white/90">
                     <tr>
-                      <th className="table-th">Nama sayang</th>
+                      <th className="table-th">Nama anggota</th>
                       <th className="table-th">Nominal wajib</th>
                       <th className="table-th">Tanggal setor</th>
                       <th className="table-th">Warna</th>
@@ -364,8 +394,8 @@ export default function MembersPage() {
                           <span className="inline-block h-7 w-14 rounded-full border border-white" style={{ backgroundColor: member.color || (member.name === 'Mpip' ? '#E3A2C8' : '#A4BBE0') }} />
                         </td>
                         <td className="table-td">
-                          <Button type="button" variant="secondary" onClick={() => startEdit(member)}>
-                            Edit
+                          <Button type="button" variant="secondary" onClick={() => startEdit(member)} disabled={!canManageMember(member)}>
+                            {canManageMember(member) ? 'Edit' : 'Terkunci'}
                           </Button>
                         </td>
                       </tr>
