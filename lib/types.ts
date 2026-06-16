@@ -67,6 +67,7 @@ export interface StoryPhoto {
   household_id: string;
   mutation_id: string;
   storage_path: string;
+  thumbnail_path: string | null;
   sort_order: number;
   uploaded_by: string | null;
   created_at: string;
@@ -127,6 +128,7 @@ export interface LoveCapsulePhoto {
   household_id: string;
   capsule_id: string;
   storage_path: string;
+  thumbnail_path: string | null;
   sort_order: number;
   uploaded_by: string | null;
   created_at: string;

@@ -1,3 +1,4 @@
+import { supabase } from '@/lib/supabase/client';
 import type { ReportExcelInput } from './reportExcelTypes';
 
 function filenameFromHeader(header: string | null) {
@@ -9,10 +10,18 @@ function filenameFromHeader(header: string | null) {
 }
 
 export async function exportReportExcel(input: ReportExcelInput) {
+  const { data, error } = await supabase.auth.getSession();
+  const accessToken = data.session?.access_token;
+  if (error || !accessToken) throw new Error('Session login tidak ditemukan. Silakan masuk ulang.');
+
+  // Server mengambil ulang data dari Supabase berdasarkan session; payload browser tidak dipercaya.
   const response = await fetch('/api/reports/excel', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input)
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`
+    },
+    body: JSON.stringify({ filterYear: input.filterYear })
   });
 
   if (!response.ok) {

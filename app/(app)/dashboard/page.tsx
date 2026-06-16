@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import type { Member, MonthlyDeposit, OtherMutation } from '@/lib/types';
 import { calculateCurrentMonthStats, calculateMemberMonthStats, calculateTotals, monthlyProgressLabel } from '@/lib/calculations';
@@ -44,8 +44,9 @@ export default function DashboardPage() {
   const [deposits, setDeposits] = useState<MonthlyDeposit[]>([]);
   const [mutations, setMutations] = useState<OtherMutation[]>([]);
   const [loading, setLoading] = useState(true);
+  const realtimeRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  async function fetchData(showLoading = true) {
+  const fetchData = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
     const [membersResult, depositsResult, mutationsResult] = await Promise.all([
       supabase.from('members').select('*').order('name'),
@@ -62,18 +63,25 @@ export default function DashboardPage() {
     setMembers((membersResult.data || []) as Member[]);
     setDeposits(normalizeDepositStatuses((depositsResult.data || []) as MonthlyDeposit[]));
     setMutations((mutationsResult.data || []) as OtherMutation[]);
-  }
+  }, [toast]);
 
   useEffect(() => {
     fetchData();
+    const scheduleRefresh = () => {
+      if (realtimeRefreshTimer.current) clearTimeout(realtimeRefreshTimer.current);
+      realtimeRefreshTimer.current = setTimeout(() => { void fetchData(false); }, 240);
+    };
     const channel = supabase
       .channel('dashboard-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'monthly_deposits' }, () => fetchData(false))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'other_mutations' }, () => fetchData(false))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, () => fetchData(false))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'monthly_deposits' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'other_mutations' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, scheduleRefresh)
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, []);
+    return () => {
+      if (realtimeRefreshTimer.current) clearTimeout(realtimeRefreshTimer.current);
+      supabase.removeChannel(channel);
+    };
+  }, [fetchData]);
 
   const totals = useMemo(() => calculateTotals(deposits, mutations), [deposits, mutations]);
   const currentMonth = useMemo(() => calculateCurrentMonthStats(members, deposits), [members, deposits]);
@@ -102,10 +110,10 @@ export default function DashboardPage() {
                 <h2 className="mt-3 text-4xl font-bold tracking-tight md:text-5xl"><AnimatedRupiah value={totals.balance} duration={1100} /></h2>
                 <p className="mt-3 max-w-xl text-sm font-medium leading-6 text-white/75">Semua setoran dan cerita uang kita sudah dihitung otomatis.</p>
                 <div className="mt-6 grid grid-cols-2 gap-3 sm:max-w-md">
-                  <Link href="/deposits" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-semibold text-[#3557bf] transition hover:bg-blue-50 focus:outline-none focus:ring-4 focus:ring-white/30">
+                  <Link prefetch={false} href="/deposits" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-semibold text-[#3557bf] transition hover:bg-blue-50 focus:outline-none focus:ring-4 focus:ring-white/30">
                     <AppIcon name="wallet" size={19} /> Catat setoran
                   </Link>
-                  <Link href="/mutations" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white/15 px-4 text-sm font-semibold text-white ring-1 ring-white/25 transition hover:bg-white/25 focus:outline-none focus:ring-4 focus:ring-white/30">
+                  <Link prefetch={false} href="/mutations" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white/15 px-4 text-sm font-semibold text-white ring-1 ring-white/25 transition hover:bg-white/25 focus:outline-none focus:ring-4 focus:ring-white/30">
                     <AppIcon name="plus" size={19} /> Tulis cerita
                   </Link>
                 </div>
@@ -132,7 +140,7 @@ export default function DashboardPage() {
               <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
                 <div className="progress-reveal h-full rounded-full bg-[#4267d6] transition-all" style={{ width: `${progressWidth}%` }} />
               </div>
-              <Link href="/deposits" className="mt-5 inline-flex w-full items-center justify-center rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Lihat detail bulan ini</Link>
+              <Link prefetch={false} href="/deposits" className="mt-5 inline-flex w-full items-center justify-center rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Lihat detail bulan ini</Link>
             </Card>
           </section>
 
@@ -154,7 +162,7 @@ export default function DashboardPage() {
                     <p className="mt-1 text-sm font-medium text-white/80">{anniversary.totalDays === 0 ? 'Hari ini anniversary kita ❤️' : anniversary.totalDays === 1 ? 'Besok hari spesial kita.' : `${anniversary.totalDays} hari lagi menuju hari spesial kita.`}</p>
                   </div>
                 </div>
-                <Link href="/capsules" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-bold text-rose-600 transition hover:bg-rose-50 focus:outline-none focus:ring-4 focus:ring-white/30"><AppIcon name="gift" size={18} /> Siapkan kejutan</Link>
+                <Link prefetch={false} href="/capsules" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-bold text-rose-600 transition hover:bg-rose-50 focus:outline-none focus:ring-4 focus:ring-white/30"><AppIcon name="gift" size={18} /> Siapkan kejutan</Link>
               </div>
             </Card>
           </section>
@@ -202,7 +210,7 @@ export default function DashboardPage() {
                   <h2 className="text-lg font-bold text-slate-900">Cerita terbaru</h2>
                   <p className="mt-1 text-sm font-medium text-slate-500">Momen uang kita di luar setoran.</p>
                 </div>
-                <Link href="/mutations" className="text-sm font-semibold text-[#3557bf] hover:underline">Lihat semua</Link>
+                <Link prefetch={false} href="/mutations" className="text-sm font-semibold text-[#3557bf] hover:underline">Lihat semua</Link>
               </div>
 
               {recentMutations.length === 0 ? (

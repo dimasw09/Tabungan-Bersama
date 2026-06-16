@@ -332,3 +332,31 @@ input[type='date']::-webkit-calendar-picker-indicator { cursor: pointer; opacity
     transform: none !important;
   }
 }
+
+/* P2 — Mobile performance without removing the romantic feel */
+.content-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 240px;
+  contain: layout paint style;
+}
+
+@media (max-width: 640px) {
+  .love-heart:nth-of-type(n+7) { display: none; }
+  .love-orb {
+    width: 12rem;
+    height: 12rem;
+    filter: blur(28px);
+    opacity: 0.12;
+    animation-duration: 20s;
+  }
+  .nav-active-love { animation: none; }
+  .fab-love { animation: heart-beat 4.2s ease-in-out infinite; }
+  .blue-hero::after,
+  .love-sheen::after { animation-duration: 10s; }
+  .mobile-light-backdrop,
+  .modal-backdrop-in,
+  .capsule-backdrop { backdrop-filter: blur(3px) !important; }
+  .story-card:nth-child(n+5),
+  .stagger-grid > *:nth-child(n+6) { animation: none; }
+  .motion-card { transition-duration: 160ms; }
+}

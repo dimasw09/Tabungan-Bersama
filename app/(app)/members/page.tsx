@@ -1,11 +1,11 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
-import type { Member, MonthlyDeposit } from '@/lib/types';
-import { rupiah, safeDueDate } from '@/lib/format';
-import { getComputedDepositStatus } from '@/lib/depositStatus';
+import type { Member } from '@/lib/types';
+import { currentYearMonth, rupiah } from '@/lib/format';
+import { resolveDepositSyncStart, type DepositSyncMode } from '@/lib/memberSettings';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -55,14 +55,16 @@ export default function MembersPage() {
   const [currentUserId, setCurrentUserId] = useState('');
   const [form, setForm] = useState<MemberForm>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [syncUnpaid, setSyncUnpaid] = useState(true);
+  const nowPeriod = currentYearMonth();
+  const [syncMode, setSyncMode] = useState<DepositSyncMode>('next');
+  const [customSyncMonth, setCustomSyncMonth] = useState(`${nowPeriod.year}-${String(nowPeriod.month).padStart(2, '0')}`);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const editingMember = useMemo(() => members.find((member) => member.id === editingId), [members, editingId]);
   const monthlyTarget = useMemo(() => members.reduce((sum, member) => sum + Number(member.monthly_amount || 0), 0), [members]);
 
-  async function fetchMembers(showLoading = true) {
+  const fetchMembers = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
 
     const { data: userResult, error: userError } = await supabase.auth.getUser();
@@ -84,7 +86,7 @@ export default function MembersPage() {
 
     setCurrentUserId(userId);
     setMembers(((memberResult.data || []) as Member[]).sort(sortDefaultMembers));
-  }
+  }, [toast]);
 
   useEffect(() => {
     fetchMembers();
@@ -97,7 +99,7 @@ export default function MembersPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [fetchMembers]);
 
   function canManageMember(member: Member | null | undefined) {
     return Boolean(member && member.auth_user_id === currentUserId);
@@ -120,46 +122,8 @@ export default function MembersPage() {
   function cancelEdit() {
     setEditingId(null);
     setForm(emptyForm);
-    setSyncUnpaid(true);
-  }
-
-  async function syncUnpaidDeposits(memberId: string, monthlyAmount: number, payday: number) {
-    const { data, error } = await supabase
-      .from('monthly_deposits')
-      .select('*')
-      .eq('member_id', memberId)
-      .is('deleted_at', null)
-      .lte('paid_amount', 0);
-
-    if (error) throw error;
-
-    const rows = ((data || []) as MonthlyDeposit[]).map((deposit) => {
-      const dueDate = safeDueDate(deposit.year, deposit.month, payday);
-      const nextDeposit = {
-        ...deposit,
-        due_date: dueDate,
-        required_amount: monthlyAmount
-      };
-
-      return {
-        id: deposit.id,
-        member_id: deposit.member_id,
-        year: deposit.year,
-        month: deposit.month,
-        due_date: dueDate,
-        required_amount: monthlyAmount,
-        actual_transfer_date: deposit.actual_transfer_date,
-        paid_amount: Number(deposit.paid_amount || 0),
-        proof_image_url: deposit.proof_image_url,
-        status: getComputedDepositStatus(nextDeposit)
-      };
-    });
-
-    if (rows.length === 0) return 0;
-
-    const { error: upsertError } = await supabase.from('monthly_deposits').upsert(rows);
-    if (upsertError) throw upsertError;
-    return rows.length;
+    setSyncMode('next');
+    setCustomSyncMonth(`${nowPeriod.year}-${String(nowPeriod.month).padStart(2, '0')}`);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -194,27 +158,29 @@ export default function MembersPage() {
       return;
     }
 
+    let syncFrom: string | null;
+    try {
+      syncFrom = resolveDepositSyncStart(syncMode, customSyncMonth, nowPeriod);
+    } catch (error) {
+      toast({ title: 'Periode belum valid', message: error instanceof Error ? error.message : 'Pilih periode mulai yang benar.', type: 'error' });
+      return;
+    }
+
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('members')
-        .update({
-          monthly_amount: monthlyAmount,
-          payday,
-          color: form.color
-        })
-        .eq('id', editingId);
-
+      const { data, error } = await supabase.rpc('update_member_settings', {
+        p_member_id: editingId,
+        p_monthly_amount: monthlyAmount,
+        p_payday: payday,
+        p_color: form.color,
+        p_effective_from: syncFrom
+      });
       if (error) throw error;
-
-      let syncedRows = 0;
-      if (syncUnpaid) {
-        syncedRows = await syncUnpaidDeposits(editingId, monthlyAmount, payday);
-      }
+      const syncedRows = Number(data || 0);
 
       toast({
         title: 'Setting berhasil disimpan',
-        message: syncUnpaid ? `${syncedRows} setoran belum dibayar ikut disesuaikan.` : 'Setoran yang sudah digenerate tidak diubah.',
+        message: syncFrom ? `${syncedRows} setoran belum dibayar mulai periode pilihan ikut disesuaikan.` : 'Setoran yang sudah dibuat tidak diubah.',
         type: 'success'
       });
       cancelEdit();
@@ -322,15 +288,29 @@ export default function MembersPage() {
                   ))}
                 </div>
               </div>
-              <label className="flex cursor-pointer gap-3 rounded-3xl palette-card p-4 text-sm font-bold text-stone-600">
-                <input
-                  type="checkbox"
-                  checked={syncUnpaid}
-                  onChange={(event) => setSyncUnpaid(event.target.checked)}
-                  className="mt-1 h-4 w-4 rounded border-stone-300"
-                />
-                <span>Ikut update setoran yang belum dibayar</span>
-              </label>
+              <fieldset className="rounded-3xl palette-card p-4">
+                <legend className="form-label px-1">Berlaku untuk setoran</legend>
+                <p className="mb-3 text-xs font-semibold leading-5 text-stone-500">Target periode lama tidak akan berubah diam-diam. Hanya setoran belum dibayar mulai periode pilihan yang disesuaikan.</p>
+                <div className="space-y-2">
+                  {([
+                    ['current', 'Mulai bulan ini'],
+                    ['next', 'Mulai bulan depan'],
+                    ['custom', 'Pilih periode mulai'],
+                    ['none', 'Jangan ubah setoran yang sudah dibuat']
+                  ] as Array<[DepositSyncMode, string]>).map(([value, label]) => (
+                    <label key={value} className="flex cursor-pointer items-center gap-3 rounded-2xl bg-white/75 px-3 py-2.5 text-sm font-bold text-stone-600">
+                      <input type="radio" name="sync-mode" value={value} checked={syncMode === value} onChange={() => setSyncMode(value)} className="h-4 w-4 border-stone-300" />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                </div>
+                {syncMode === 'custom' ? (
+                  <div className="mt-3">
+                    <label className="text-xs font-bold text-stone-500" htmlFor="member-sync-month">Periode mulai</label>
+                    <input id="member-sync-month" type="month" className="form-input mt-2" min={`${nowPeriod.year}-${String(nowPeriod.month).padStart(2, '0')}`} value={customSyncMonth} onChange={(event) => setCustomSyncMonth(event.target.value)} />
+                  </div>
+                ) : null}
+              </fieldset>
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Button type="submit" disabled={saving} className="w-full sm:w-auto">
                   {saving ? 'Menyimpan...' : 'Simpan'}

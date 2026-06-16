@@ -1,13 +1,15 @@
 {
   "name": "tabungan-bersama-kakak-mpip",
-  "version": "2.3.0",
+  "version": "2.5.1",
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npm run typecheck && next build",
-    "start": "next start",
-    "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "test:compile": "node -e \"require('node:fs').rmSync('.test-dist',{recursive:true,force:true})\" && tsc -p tsconfig.test.json",
+    "test": "npm run test:compile && node --test .test-dist/tests/core.test.js",
+    "build": "npm run lint && npm run typecheck && npm test && next build",
+    "start": "next start"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",

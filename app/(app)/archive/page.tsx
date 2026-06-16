@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import type { AuditLog, HouseholdMember, MonthlyDeposit, OtherMutation } from '@/lib/types';
@@ -32,7 +32,7 @@ export default function ArchivePage() {
   const [restoring, setRestoring] = useState(false);
   const [target, setTarget] = useState<RestoreTarget>(null);
 
-  async function fetchData(showLoading = true) {
+  const fetchData = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
     const { data: userResult, error: userError } = await supabase.auth.getUser();
     const userId = userResult.user?.id;
@@ -62,9 +62,9 @@ export default function ArchivePage() {
     setMutations((mutationResult.data || []) as OtherMutation[]);
     setLogs((logResult.data || []) as AuditLog[]);
     setMemberships(nextMemberships);
-  }
+  }, [toast]);
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const names = useMemo(() => new Map(memberships.map((item) => [item.user_id, item.display_name])), [memberships]);
 

@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "lib": ["ES2020", "DOM"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": false,
+    "outDir": ".test-dist",
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": [
+    "tests/**/*.ts",
+    "lib/calculations.ts",
+    "lib/depositStatus.ts",
+    "lib/format.ts",
+    "lib/loveCapsule.ts",
+    "lib/memberSettings.ts",
+    "lib/realtimeState.ts",
+    "lib/types.ts"
+  ]
+}

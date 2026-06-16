@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import type { LoveCapsule, LoveCapsulePhoto } from '@/lib/types';
 import { AppIcon } from '@/components/ui/AppIcon';
@@ -36,9 +36,14 @@ export function CapsuleDueOverlay() {
   const [reveal, setReveal] = useState<RevealCapsule | null>(null);
   const [opening, setOpening] = useState(false);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const timerRef = useRef<number | null>(null);
 
   const fetchDue = useCallback(async () => {
-    if (window.sessionStorage.getItem('love-capsules:snoozed') === 'yes') return;
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+
     const { data: userData } = await supabase.auth.getUser();
     const userId = userData.user?.id;
     if (!userId) return;
@@ -48,29 +53,63 @@ export function CapsuleDueOverlay() {
       .select('*')
       .eq('recipient_user_id', userId)
       .is('opened_at', null)
-      .lte('unlock_at', new Date().toISOString())
       .order('unlock_at', { ascending: true })
-      .limit(1)
-      .maybeSingle();
+      .limit(20);
 
-    if (error || !data) return;
-    const capsule = data as LoveCapsule;
-    const { data: sender } = await supabase
-      .from('household_members')
-      .select('display_name')
-      .eq('user_id', capsule.sender_user_id)
-      .maybeSingle();
+    if (error) return;
+    const capsules = (data || []) as LoveCapsule[];
+    const now = Date.now();
+    const nextDue = capsules.find((capsule) => {
+      const snoozeKey = `love-capsules:snoozed:${capsule.id}`;
+      const snoozedUntil = Number(window.sessionStorage.getItem(snoozeKey) || 0);
+      if (snoozedUntil > now) return false;
+      if (snoozedUntil > 0) window.sessionStorage.removeItem(snoozeKey);
+      return new Date(capsule.unlock_at).getTime() <= now;
+    });
 
-    setDue({ ...capsule, sender_name: sender?.display_name || 'Pasanganmu' });
-    window.setTimeout(() => vibrate([180, 90, 180, 90, 320]), 250);
+    if (nextDue) {
+      const { data: sender } = await supabase
+        .from('household_members')
+        .select('display_name')
+        .eq('user_id', nextDue.sender_user_id)
+        .maybeSingle();
+      setDue({ ...nextDue, sender_name: sender?.display_name || 'Pasanganmu' });
+      window.setTimeout(() => vibrate([180, 90, 180, 90, 320]), 250);
+      return;
+    }
+
+    setDue(null);
+    const futureTimes = capsules
+      .map((capsule) => new Date(capsule.unlock_at).getTime())
+      .filter((time) => Number.isFinite(time) && time > now);
+    const nearestFuture = futureTimes.length > 0 ? Math.min(...futureTimes) : null;
+    const snoozeTimes = capsules
+      .map((capsule) => Number(window.sessionStorage.getItem(`love-capsules:snoozed:${capsule.id}`) || 0))
+      .filter((time) => time > now);
+    const nearestSnooze = snoozeTimes.length > 0 ? Math.min(...snoozeTimes) : null;
+    const wakeAt = [nearestFuture, nearestSnooze].filter((value): value is number => value !== null).sort((a, b) => a - b)[0];
+    if (wakeAt) {
+      const delay = Math.min(Math.max(wakeAt - now + 250, 500), 60 * 60 * 1000);
+      timerRef.current = window.setTimeout(() => fetchDue(), delay);
+    }
   }, []);
 
   useEffect(() => {
     fetchDue();
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchDue(); };
+    const onFocus = () => fetchDue();
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onFocus);
+
     const channel = supabase.channel('love-capsules-due-global')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'love_capsules' }, () => fetchDue())
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onFocus);
+      supabase.removeChannel(channel);
+    };
   }, [fetchDue]);
 
   async function openCapsule() {
@@ -104,8 +143,10 @@ export function CapsuleDueOverlay() {
   }
 
   function snooze() {
-    window.sessionStorage.setItem('love-capsules:snoozed', 'yes');
+    if (!due) return;
+    window.sessionStorage.setItem(`love-capsules:snoozed:${due.id}`, String(Date.now() + 15 * 60 * 1000));
     setDue(null);
+    window.setTimeout(() => fetchDue(), 100);
   }
 
   function closeReveal() {
