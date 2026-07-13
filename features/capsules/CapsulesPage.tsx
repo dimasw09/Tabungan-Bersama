@@ -37,6 +37,7 @@ export default function CapsulesPage() {
   const [contents, setContents] = useState<LoveCapsuleContent[]>([]);
   const [photos, setPhotos] = useState<CapsulePhotoView[]>([]);
   const [featureReady, setFeatureReady] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<LoveCapsule | null>(null);
   const [form, setForm] = useState<CapsuleForm>(emptyCapsuleForm());
@@ -50,6 +51,7 @@ export default function CapsulesPage() {
 
   const fetchData = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
+    setLoadError('');
     const { data: userData, error: userError } = await supabase.auth.getUser();
     const userId = userData.user?.id;
     if (userError || !userId) {
@@ -80,7 +82,9 @@ export default function CapsulesPage() {
 
     if (showLoading) setLoading(false);
     if (capsulesResult.error) {
-      setFeatureReady(false);
+      const featureMissing = capsulesResult.error.code === '42P01' || capsulesResult.error.code === 'PGRST205';
+      setFeatureReady(!featureMissing);
+      setLoadError(featureMissing ? '' : capsulesResult.error.message);
       setCurrentUserId(userId);
       setHouseholdId(hhId);
       setMembers((membersResult.data || []) as HouseholdMember[]);
@@ -95,6 +99,7 @@ export default function CapsulesPage() {
     const rawPhotos = (photosResult.data || []) as LoveCapsulePhoto[];
 
     setFeatureReady(true);
+    setLoadError('');
     setCurrentUserId(userId);
     setHouseholdId(hhId);
     setMembers((membersResult.data || []) as HouseholdMember[]);
@@ -465,6 +470,15 @@ export default function CapsulesPage() {
 
   if (loading) return <LoadingState />;
 
+  if (loadError) {
+    return (
+      <main>
+        <PageHeader title="Kapsul" description="Pesan kecil yang menunggu waktu terbaik untuk ditemukan." />
+        <EmptyState title="Love Capsule belum berhasil dimuat" description={loadError} />
+        <div className="mt-4 flex justify-center"><Button type="button" onClick={() => fetchData()}>Coba lagi</Button></div>
+      </main>
+    );
+  }
   if (!featureReady) {
     return (
       <main>

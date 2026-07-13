@@ -44,6 +44,7 @@ export default function DashboardPage() {
   const [deposits, setDeposits] = useState<MonthlyDeposit[]>([]);
   const [mutations, setMutations] = useState<OtherMutation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [clock, setClock] = useState(() => new Date());
   const realtimeRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchData = useCallback(async (showLoading = true) => {
@@ -83,13 +84,22 @@ export default function DashboardPage() {
     };
   }, [fetchData]);
 
+  useEffect(() => {
+    const refreshClock = () => setClock(new Date());
+    const timer = window.setInterval(refreshClock, 60_000);
+    document.addEventListener('visibilitychange', refreshClock);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshClock);
+    };
+  }, []);
   const totals = useMemo(() => calculateTotals(deposits, mutations), [deposits, mutations]);
-  const currentMonth = useMemo(() => calculateCurrentMonthStats(members, deposits), [members, deposits]);
+  const currentMonth = useMemo(() => calculateCurrentMonthStats(members, deposits, clock), [members, deposits, clock]);
   const memberProgress = useMemo(() => calculateMemberMonthStats(members, deposits, currentMonth.year, currentMonth.month), [members, deposits, currentMonth.year, currentMonth.month]);
   const progressWidth = Math.min(currentMonth.progress, 100);
   const recentMutations = mutations.slice().sort((a, b) => b.mutation_date.localeCompare(a.mutation_date)).slice(0, 4);
   const isMonthComplete = currentMonth.status === 'COMPLETE' || currentMonth.status === 'OVERPAID';
-  const anniversary = useMemo(() => anniversaryCountdown(), []);
+  const anniversary = useMemo(() => anniversaryCountdown(clock), [clock]);
 
   if (loading) return <LoadingState />;
 

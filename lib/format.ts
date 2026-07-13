@@ -65,12 +65,10 @@ export function safeDueDate(year: number, month: number, payday: number) {
   return dateInput(year, month, day);
 }
 
-export function currentYearMonth() {
-  const now = new Date();
+export function currentYearMonth(now = new Date()) {
   return { year: now.getFullYear(), month: now.getMonth() + 1 };
 }
 
-export function todayInput() {
-  const now = new Date();
+export function todayInput(now = new Date()) {
   return dateInput(now.getFullYear(), now.getMonth() + 1, now.getDate());
 }

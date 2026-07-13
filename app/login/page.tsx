@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/Button';
+import { safeInternalPath } from '@/lib/navigation';
 
 interface LoginResponse {
   accessToken?: string;
@@ -75,8 +76,7 @@ export default function LoginPage() {
       }
 
       const next = new URLSearchParams(window.location.search).get('next');
-      const destination = next?.startsWith('/') ? next : '/dashboard';
-      window.location.replace(destination);
+      window.location.replace(safeInternalPath(next));
     } catch {
       setError('Tidak dapat terhubung ke server login. Coba lagi.');
     } finally {
@@ -117,7 +117,7 @@ export default function LoginPage() {
             <label className="form-label" htmlFor="password">Password</label>
             <input id="password" className="form-input mt-2" type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} />
           </div>
-          {!isSupabaseConfigured ? <p role="alert" className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">Isi NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, dan SUPABASE_SERVICE_ROLE_KEY terlebih dahulu.</p> : null}
+          {!isSupabaseConfigured ? <p role="alert" className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">Isi NEXT_PUBLIC_SUPABASE_URL dan NEXT_PUBLIC_SUPABASE_ANON_KEY terlebih dahulu. Konfigurasi server akan diperiksa saat login.</p> : null}
           {success ? <p role="status" className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{success}</p> : null}
           {error ? <p role="alert" className="rounded-2xl bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</p> : null}
           <Button className="min-h-12 w-full" type="submit" disabled={loading || !isSupabaseConfigured}>{loading ? 'Lagi masuk...' : 'Masuk'}</Button>

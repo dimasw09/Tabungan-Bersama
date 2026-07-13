@@ -27,8 +27,8 @@ export function calculateTotals(deposits: MonthlyDeposit[], mutations: OtherMuta
   };
 }
 
-export function calculateCurrentMonthStats(members: Member[], deposits: MonthlyDeposit[]) {
-  const { year, month } = currentYearMonth();
+export function calculateCurrentMonthStats(members: Member[], deposits: MonthlyDeposit[], now = new Date()) {
+  const { year, month } = currentYearMonth(now);
   const target = members.reduce((sum, member) => sum + toNumber(member.monthly_amount), 0);
   const currentDeposits = deposits.filter((item) => item.year === year && item.month === month);
   const paid = currentDeposits.reduce((sum, item) => sum + toNumber(item.paid_amount), 0);

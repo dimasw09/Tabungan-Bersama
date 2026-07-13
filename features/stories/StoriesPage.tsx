@@ -26,12 +26,14 @@ const PhotoViewer = dynamic(() => import('./StoryPhotoViewer').then((module) => 
 
 const MAX_STORY_PHOTOS = 10;
 
-const emptyForm = {
-  mutation_date: todayInput(),
-  type: 'Tambah' as MutationType,
-  amount: 0,
-  description: ''
-};
+function createEmptyForm() {
+  return {
+    mutation_date: todayInput(),
+    type: 'Tambah' as MutationType,
+    amount: 0,
+    description: ''
+  };
+}
 
 type PendingStoryPhoto = { key: string; file: File; previewUrl: string };
 
@@ -75,7 +77,7 @@ export default function MutationsPage() {
   const [photos, setPhotos] = useState<StoryPhotoView[]>([]);
   const [householdId, setHouseholdId] = useState('');
   const [albumReady, setAlbumReady] = useState(true);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(createEmptyForm);
   const [editing, setEditing] = useState<OtherMutation | null>(null);
   const [pendingPhotos, setPendingPhotos] = useState<PendingStoryPhoto[]>([]);
   const [removedPhotoIds, setRemovedPhotoIds] = useState<string[]>([]);
@@ -186,6 +188,7 @@ export default function MutationsPage() {
     });
   }, [mutations, filterYear, filterMonth, filterType, search]);
 
+  const hasActiveFilters = filterYear !== 'all' || filterMonth !== 'all' || filterType !== 'all' || search.trim().length > 0;
 
   const { visibleItems: visibleMutations, hasMore: hasMoreMutations, loadMore: loadMoreMutations, remaining: remainingMutations } = useProgressiveList(
     filteredMutations,
@@ -232,7 +235,7 @@ export default function MutationsPage() {
     clearPendingPhotos();
     setEditing(null);
     setRemovedPhotoIds([]);
-    setForm({ ...emptyForm, mutation_date: todayInput() });
+    setForm(createEmptyForm());
     setFormOpen(true);
   }
 
@@ -240,7 +243,7 @@ export default function MutationsPage() {
     if (saving) return;
     clearPendingPhotos();
     setRemovedPhotoIds([]);
-    setForm(emptyForm);
+    setForm(createEmptyForm());
     setEditing(null);
     setFormOpen(false);
   }
@@ -522,8 +525,15 @@ export default function MutationsPage() {
 
         {filteredMutations.length === 0 ? (
           <div className="space-y-4">
-            <EmptyState title="Belum ada cerita kita" description="Tulis momen pertama, lalu tambahkan foto kenangannya." />
-            <Button type="button" className="w-full md:hidden" onClick={openCreateForm}>Tulis cerita pertama</Button>
+            <EmptyState
+              title={mutations.length > 0 && hasActiveFilters ? 'Cerita tidak ditemukan' : 'Belum ada cerita kita'}
+              description={mutations.length > 0 && hasActiveFilters ? 'Tidak ada cerita yang cocok dengan filter atau pencarian ini.' : 'Tulis momen pertama, lalu tambahkan foto kenangannya.'}
+            />
+            {mutations.length > 0 && hasActiveFilters ? (
+              <Button type="button" className="w-full" variant="secondary" onClick={resetFilters}>Reset filter</Button>
+            ) : (
+              <Button type="button" className="w-full md:hidden" onClick={openCreateForm}>Tulis cerita pertama</Button>
+            )}
           </div>
         ) : (
           <div className="grid gap-5 md:grid-cols-2">

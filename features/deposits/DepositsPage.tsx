@@ -30,13 +30,13 @@ import { removeStoragePaths } from '@/lib/storageMedia';
 import { useProgressiveList } from '@/hooks/useProgressiveList';
 import { removeById, upsertById } from '@/lib/realtimeState';
 
-const initialYearMonth = currentYearMonth();
 import { LocalProofPreview, MiniSummaryCard, PaymentCard, ProofThumbnail } from './DepositCards';
 import { ALLOWED_PROOF_TYPES, MAX_PROOF_SIZE, MIN_DEPOSIT_YEAR, getPaymentDraftWarnings, shiftMonth, sortMembers, validatePaymentDraft, type ConfirmAction, type DepositRow, type PaymentDraft } from './depositModel';
 
 export default function DepositsPage() {
   const { toast } = useToast();
-  const today = todayInput();
+  const [today, setToday] = useState(todayInput);
+  const [currentPeriod, setCurrentPeriod] = useState(currentYearMonth);
   const [members, setMembers] = useState<Member[]>([]);
   const membersRef = useRef<Member[]>([]);
   const [householdId, setHouseholdId] = useState('');
@@ -45,7 +45,7 @@ export default function DepositsPage() {
   const [loading, setLoading] = useState(true);
   const [savingDraft, setSavingDraft] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [selectedYearMonth, setSelectedYearMonth] = useState(initialYearMonth);
+  const [selectedYearMonth, setSelectedYearMonth] = useState(currentYearMonth);
   const [paymentDraft, setPaymentDraft] = useState<PaymentDraft | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showHistoryFilter, setShowHistoryFilter] = useState(false);
@@ -90,6 +90,25 @@ export default function DepositsPage() {
   useEffect(() => {
     membersRef.current = members;
   }, [members]);
+
+  useEffect(() => {
+    const refreshPeriod = () => {
+      const nextPeriod = currentYearMonth();
+      setToday(todayInput());
+      setCurrentPeriod((previousPeriod) => {
+        setSelectedYearMonth((selected) => (
+          selected.year === previousPeriod.year && selected.month === previousPeriod.month ? nextPeriod : selected
+        ));
+        return nextPeriod;
+      });
+    };
+    const timer = window.setInterval(refreshPeriod, 60_000);
+    document.addEventListener('visibilitychange', refreshPeriod);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshPeriod);
+    };
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -171,10 +190,10 @@ export default function DepositsPage() {
   }, [selectedRows]);
 
   const years = useMemo(() => {
-    const set = new Set<number>([MIN_DEPOSIT_YEAR, initialYearMonth.year, selectedYearMonth.year]);
+    const set = new Set<number>([MIN_DEPOSIT_YEAR, currentPeriod.year, selectedYearMonth.year]);
     deposits.forEach((deposit) => set.add(deposit.year));
     return Array.from(set).sort((a, b) => a - b);
-  }, [deposits, selectedYearMonth.year]);
+  }, [deposits, selectedYearMonth.year, currentPeriod.year]);
 
   const filteredDeposits = useMemo(() => {
     return deposits.filter((deposit) => {
@@ -203,7 +222,7 @@ export default function DepositsPage() {
     setSelectedYearMonth((current) => {
       const next = shiftMonth(current.year, current.month, diff);
       const minValue = MIN_DEPOSIT_YEAR * 100 + 1;
-      const maxValue = initialYearMonth.year * 100 + 12;
+      const maxValue = currentPeriod.year * 100 + 12;
       const nextValue = next.year * 100 + next.month;
 
       if (nextValue < minValue || nextValue > maxValue) return current;
@@ -457,15 +476,15 @@ export default function DepositsPage() {
             onClick={() => changeMonth(1)}
             className="h-11 w-11 shrink-0 rounded-full p-0"
             aria-label="Bulan berikutnya"
-            disabled={selectedYearMonth.year === initialYearMonth.year && selectedYearMonth.month === 12}
+            disabled={selectedYearMonth.year === currentPeriod.year && selectedYearMonth.month === 12}
           >
             <AppIcon name="chevron-right" size={21} />
           </Button>
         </div>
 
         <div className="mt-3 flex justify-center">
-          {(selectedYearMonth.year !== initialYearMonth.year || selectedYearMonth.month !== initialYearMonth.month) ? (
-            <button type="button" onClick={() => setSelectedYearMonth(initialYearMonth)} className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/25 focus:outline-none focus:ring-2 focus:ring-white">Kembali ke bulan ini</button>
+          {(selectedYearMonth.year !== currentPeriod.year || selectedYearMonth.month !== currentPeriod.month) ? (
+            <button type="button" onClick={() => setSelectedYearMonth(currentPeriod)} className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/25 focus:outline-none focus:ring-2 focus:ring-white">Kembali ke bulan ini</button>
           ) : <span className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-white">Bulan ini</span>}
         </div>
 
@@ -651,7 +670,7 @@ export default function DepositsPage() {
             className="form-input text-base font-semibold"
             type="month"
             min={`${MIN_DEPOSIT_YEAR}-01`}
-            max={`${initialYearMonth.year}-12`}
+            max={`${currentPeriod.year}-12`}
             value={`${selectedYearMonth.year}-${String(selectedYearMonth.month).padStart(2, '0')}`}
             onChange={(event) => {
               const [year, month] = event.target.value.split('-').map(Number);
@@ -659,7 +678,7 @@ export default function DepositsPage() {
             }}
           />
           <div className="grid grid-cols-2 gap-3">
-            <Button type="button" variant="secondary" onClick={() => { setSelectedYearMonth(initialYearMonth); setMonthPickerOpen(false); }}>Bulan ini</Button>
+            <Button type="button" variant="secondary" onClick={() => { setSelectedYearMonth(currentPeriod); setMonthPickerOpen(false); }}>Bulan ini</Button>
             <Button type="button" onClick={() => setMonthPickerOpen(false)}>Tampilkan</Button>
           </div>
         </div>

@@ -19,6 +19,7 @@
     "lib/format.ts",
     "lib/loveCapsule.ts",
     "lib/memberSettings.ts",
+    "lib/navigation.ts",
     "lib/realtimeState.ts",
     "lib/types.ts"
   ]

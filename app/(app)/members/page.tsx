@@ -29,7 +29,10 @@ const emptyForm: MemberForm = {
 };
 
 function sortDefaultMembers(a: Member, b: Member) {
-  return DEFAULT_MEMBER_NAMES.indexOf(a.name) - DEFAULT_MEMBER_NAMES.indexOf(b.name);
+  const order = new Map(DEFAULT_MEMBER_NAMES.map((name, index) => [name.toLowerCase(), index]));
+  const aRank = order.get(a.name.toLowerCase()) ?? DEFAULT_MEMBER_NAMES.length;
+  const bRank = order.get(b.name.toLowerCase()) ?? DEFAULT_MEMBER_NAMES.length;
+  return aRank - bRank || a.name.localeCompare(b.name, 'id');
 }
 
 function MemberBigCard({ member, onEdit, canEdit }: { member: Member; onEdit: (member: Member) => void; canEdit: boolean }) {
@@ -75,7 +78,7 @@ export default function MembersPage() {
       return;
     }
 
-    const memberResult = await supabase.from('members').select('*').in('name', DEFAULT_MEMBER_NAMES).order('name');
+    const memberResult = await supabase.from('members').select('*').order('name');
     if (showLoading) setLoading(false);
 
     const error = memberResult.error;

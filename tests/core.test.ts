@@ -6,6 +6,7 @@ import { safeDueDate } from '../lib/format';
 import { jakartaDateTimeToIso, nextAnniversary } from '../lib/loveCapsule';
 import { resolveDepositSyncStart } from '../lib/memberSettings';
 import { removeById, upsertById } from '../lib/realtimeState';
+import { safeInternalPath } from '../lib/navigation';
 import type { Member, MonthlyDeposit, OtherMutation } from '../lib/types';
 
 const member: Member = {
@@ -104,4 +105,11 @@ test('realtime upsert bisa menjaga urutan list', () => {
 test('realtime delete hanya menghapus item target', () => {
   const rows = [{ id: 'a', value: 1 }, { id: 'b', value: 2 }];
   assert.deepEqual(removeById(rows, 'a'), [{ id: 'b', value: 2 }]);
+});
+
+test('redirect login hanya menerima path internal', () => {
+  assert.equal(safeInternalPath('/mutations?year=2026'), '/mutations?year=2026');
+  assert.equal(safeInternalPath('//evil.example/phishing'), '/dashboard');
+  assert.equal(safeInternalPath('https://evil.example'), '/dashboard');
+  assert.equal(safeInternalPath(null), '/dashboard');
 });
