@@ -15,6 +15,7 @@ import { Modal } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { RupiahInput } from '@/components/ui/RupiahInput';
 import { AppIcon } from '@/components/ui/AppIcon';
+import { PhotoSourcePicker } from '@/components/ui/PhotoSourcePicker';
 import { useToast } from '@/components/ui/ToastProvider';
 import { prepareImageForUpload, validateImageFile } from '@/lib/imageProcessing';
 import { removeStoragePaths } from '@/lib/storageMedia';
@@ -645,10 +646,13 @@ export default function MutationsPage() {
               </div>
             ) : null}
 
-            <label className={`mt-4 flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-2xl px-4 text-sm font-bold transition ${!albumReady || formPhotoCount >= MAX_STORY_PHOTOS ? 'cursor-not-allowed bg-slate-100 text-slate-400' : 'bg-white text-rose-600 shadow-sm ring-1 ring-rose-100 hover:bg-rose-50'}`}>
-              <AppIcon name="plus" size={18} /> Pilih foto dari galeri
-              <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" className="sr-only" disabled={!albumReady || formPhotoCount >= MAX_STORY_PHOTOS} onChange={addPhotos} />
-            </label>
+            <PhotoSourcePicker
+              className="mt-4"
+              accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif"
+              multipleGallery
+              disabled={!albumReady || formPhotoCount >= MAX_STORY_PHOTOS}
+              onChange={addPhotos}
+            />
             {!albumReady ? <p className="mt-3 text-xs font-semibold text-amber-700">Album belum aktif. Jalankan file SQL Tahap 2 terlebih dahulu.</p> : null}
           </div>
 

@@ -25,6 +25,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { RupiahInput } from '@/components/ui/RupiahInput';
 import { AppIcon } from '@/components/ui/AppIcon';
 import { AnimatedNumber, AnimatedRupiah } from '@/components/ui/AnimatedNumber';
+import { PhotoSourcePicker } from '@/components/ui/PhotoSourcePicker';
 import { prepareImageForUpload } from '@/lib/imageProcessing';
 import { removeStoragePaths } from '@/lib/storageMedia';
 import { useProgressiveList } from '@/hooks/useProgressiveList';
@@ -261,6 +262,13 @@ export default function DepositsPage() {
     if (!ALLOWED_PROOF_TYPES.has(file.type)) throw new Error('Format bukti transfer harus JPG, PNG, WebP, HEIC, atau HEIF.');
     if (file.size <= 0) throw new Error('File bukti transfer kosong atau rusak.');
     if (file.size > MAX_PROOF_SIZE) throw new Error('Ukuran foto maksimal 5MB.');
+  }
+
+  function selectProofFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setPaymentDraft((current) => current ? { ...current, proofFile: file } : current);
   }
 
   async function uploadProof(file: File, depositId: string) {
@@ -730,19 +738,16 @@ export default function DepositsPage() {
               <p id="payment-amount-help" className="mt-2 text-xs font-semibold text-slate-400">Nilai ini adalah total setoran yang sudah masuk untuk periode tersebut.</p>
             </div>
 
-            <div>
-              <label className="form-label" htmlFor="payment-proof">Bukti transfer</label>
-              <input
-                id="payment-proof"
-                className="form-input mt-2"
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={(event: ChangeEvent<HTMLInputElement>) => setPaymentDraft({ ...paymentDraft, proofFile: event.target.files?.[0] || null })}
+            <fieldset>
+              <legend className="form-label">Bukti transfer</legend>
+              <PhotoSourcePicker
+                className="mt-2"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                onChange={selectProofFile}
               />
-              <p className="mt-1 text-xs font-semibold text-slate-400">Wajib kalau ada nominal masuk. Upload bukti yang jelas ya, maksimal 5MB.</p>
+              <p className="mt-2 text-xs font-semibold text-slate-400">Wajib kalau ada nominal masuk. Ambil foto langsung atau pilih dari galeri, maksimal 5MB.</p>
               <LocalProofPreview file={paymentDraft.proofFile} />
-            </div>
+            </fieldset>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <Button type="button" variant="secondary" className="min-h-12" onClick={() => setPaymentDraft(null)} disabled={savingDraft}>

@@ -19,6 +19,7 @@ import type { CapsulePreviewData } from '@/components/capsules/CapsuleRecipientP
 import { prepareImageForUpload, validateImageFile } from '@/lib/imageProcessing';
 import { getSignedUrlCached, removeStoragePaths } from '@/lib/storageMedia';
 import { LazyStorageImage } from '@/components/ui/LazyStorageImage';
+import { PhotoSourcePicker } from '@/components/ui/PhotoSourcePicker';
 import { useProgressiveList } from '@/hooks/useProgressiveList';
 import { removeById, upsertById } from '@/lib/realtimeState';
 import { MAX_CAPSULE_PHOTOS, capsuleStatusLabel, emptyCapsuleForm, themeMeta, type CapsuleForm, type CapsulePhotoView, type CapsuleReveal, type PendingCapsulePhoto } from './capsuleModel';
@@ -634,10 +635,13 @@ export default function CapsulesPage() {
 
           <div>
             <div className="flex items-center justify-between gap-3"><p className="form-label">Foto kenangan</p><span className="text-xs font-semibold text-slate-400">{totalFormPhotos}/10</span></div>
-            <label className="mt-2 flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-sm font-semibold text-slate-600 hover:border-rose-300 hover:bg-rose-50">
-              <AppIcon name="camera" /> Tambah foto
-              <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" multiple className="sr-only" onChange={addPhotos} disabled={totalFormPhotos >= MAX_CAPSULE_PHOTOS} />
-            </label>
+            <PhotoSourcePicker
+              className="mt-2"
+              accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif"
+              multipleGallery
+              disabled={totalFormPhotos >= MAX_CAPSULE_PHOTOS}
+              onChange={addPhotos}
+            />
             {(visibleExistingPhotos.length > 0 || pendingPhotos.length > 0) ? (
               <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
                 {visibleExistingPhotos.map((photo) => (
