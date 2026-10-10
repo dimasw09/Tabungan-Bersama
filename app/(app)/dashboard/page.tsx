@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { AppIcon } from '@/components/ui/AppIcon';
 import { AnimatedNumber, AnimatedRupiah } from '@/components/ui/AnimatedNumber';
 import { anniversaryCountdown } from '@/lib/loveCapsule';
+import { ShoppingSubsidyAgreement } from '@/components/dashboard/ShoppingSubsidyAgreement';
 
 function MetricCard({ icon, label, value, helper }: { icon: 'wallet' | 'arrow-down' | 'arrow-up'; label: string; value: number; helper: string }) {
   return (
@@ -106,6 +107,8 @@ export default function DashboardPage() {
   return (
     <main>
       <PageHeader title="Beranda" description="Ringkasan tabungan Kakak dan Mpip hari ini." />
+
+      <ShoppingSubsidyAgreement />
 
       {members.length === 0 ? (
         <EmptyState title="Belum ada anggota" description="Data Kakak dan Mpip belum tersedia atau belum terhubung ke household ini." />

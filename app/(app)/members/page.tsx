@@ -13,6 +13,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/ToastProvider';
 import { RupiahInput } from '@/components/ui/RupiahInput';
+import { AgreementSettings } from '@/components/settings/AgreementSettings';
 
 const DEFAULT_MEMBER_NAMES = ['Mpip', 'Kakak'];
 
@@ -202,13 +203,15 @@ export default function MembersPage() {
     <main>
       <PageHeader
         title="Pengaturan"
-        description="Atur target setoran, tanggal jatuh tempo, dan warna profil milikmu."
+        description="Atur kesepakatan bersama, target setoran, tanggal jatuh tempo, dan warna profil."
         action={<Link href="/archive" className="inline-flex rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Arsip & audit</Link>}
       />
 
       <div className="mb-5 rounded-3xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-semibold text-[#3557bf]">
         Kakak dan Mpip hanya bisa mengubah pengaturan milik akun masing-masing. Data pasangan tetap bisa dilihat.
       </div>
+
+      <AgreementSettings />
 
       {members.length < 2 ? (
         <div className="mb-5">
