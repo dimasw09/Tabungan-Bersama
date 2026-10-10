@@ -7,6 +7,8 @@ import { jakartaDateTimeToIso, nextAnniversary } from '../lib/loveCapsule';
 import { resolveDepositSyncStart } from '../lib/memberSettings';
 import { removeById, upsertById } from '../lib/realtimeState';
 import { safeInternalPath } from '../lib/navigation';
+import { isPaymentDraftAffectedByChange } from '../lib/depositConcurrency';
+import { buildDashboardActivities, buildDepositReminders } from '../lib/dashboard';
 import type { Member, MonthlyDeposit, OtherMutation } from '../lib/types';
 
 const member: Member = {
@@ -112,4 +114,68 @@ test('redirect login hanya menerima path internal', () => {
   assert.equal(safeInternalPath('//evil.example/phishing'), '/dashboard');
   assert.equal(safeInternalPath('https://evil.example'), '/dashboard');
   assert.equal(safeInternalPath(null), '/dashboard');
+});
+
+test('draft setoran mendeteksi perubahan versi dari perangkat lain', () => {
+  const existingDeposit = deposit({ updated_at: '2026-06-10T10:00:00Z' });
+  const draft = {
+    member,
+    deposit: existingDeposit,
+    year: existingDeposit.year,
+    month: existingDeposit.month,
+    due_date: existingDeposit.due_date,
+    required_amount: existingDeposit.required_amount,
+    actual_transfer_date: '',
+    paid_amount: 0,
+    proofFile: null,
+    mode: 'custom'
+  };
+
+  assert.equal(isPaymentDraftAffectedByChange(draft, { id: existingDeposit.id, updated_at: existingDeposit.updated_at }), false);
+  assert.equal(isPaymentDraftAffectedByChange(draft, { id: existingDeposit.id, updated_at: '2026-06-10T10:01:00Z' }), true);
+  assert.equal(isPaymentDraftAffectedByChange(draft, { id: 'deposit-lain', updated_at: '2026-06-10T10:01:00Z' }), false);
+});
+
+test('draft setoran baru mendeteksi insert pada anggota dan periode yang sama', () => {
+  const draft = {
+    member,
+    deposit: null,
+    year: 2026,
+    month: 6,
+    due_date: '2026-06-28',
+    required_amount: 162_000,
+    actual_transfer_date: '',
+    paid_amount: 0,
+    proofFile: null,
+    mode: 'custom'
+  };
+
+  assert.equal(isPaymentDraftAffectedByChange(draft, { member_id: member.id, year: 2026, month: 6 }), true);
+  assert.equal(isPaymentDraftAffectedByChange(draft, { member_id: member.id, year: 2026, month: 7 }), false);
+});
+
+test('reminder setoran mengurutkan yang paling mendesak dan memakai jatuh tempo anggota', () => {
+  const otherMember = { ...member, id: 'member-2', name: 'Mpip', payday: 12 };
+  const reminders = buildDepositReminders(
+    [member, otherMember],
+    [deposit({ paid_amount: 100_000, updated_at: '2026-06-10T10:00:00Z' })],
+    new Date(2026, 5, 10)
+  );
+
+  assert.equal(reminders.length, 2);
+  assert.equal(reminders[0].memberName, 'Mpip');
+  assert.equal(reminders[0].daysUntilDue, 2);
+  assert.equal(reminders[0].status, 'soon');
+  assert.equal(reminders[1].remaining, 62_000);
+});
+
+test('aktivitas dashboard menggabungkan setoran dan cerita berdasarkan tanggal terbaru', () => {
+  const activities = buildDashboardActivities(
+    [deposit({ paid_amount: 162_000, actual_transfer_date: '2026-06-10', updated_at: '2026-06-10T10:00:00Z' })],
+    [mutation({ mutation_date: '2026-06-11', type: 'Penarikan', amount: 25_000, description: 'Belanja' })]
+  );
+
+  assert.deepEqual(activities.map((item) => item.kind), ['withdrawal', 'deposit']);
+  assert.equal(activities[0].description, 'Belanja');
+  assert.equal(activities[1].title, 'Kakak menyetor');
 });

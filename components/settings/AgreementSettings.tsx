@@ -19,26 +19,45 @@ export function AgreementSettings() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Agreement | null>(null);
+  const [discardConfirmationOpen, setDiscardConfirmationOpen] = useState(false);
   const [form, setForm] = useState<AgreementForm>(emptyForm);
+  const [initialForm, setInitialForm] = useState<AgreementForm>(emptyForm);
+
+  const formDirty = form.title !== initialForm.title
+    || form.summary !== initialForm.summary
+    || form.points !== initialForm.points;
 
   useEffect(() => { setAgreements(readAgreements()); }, []);
 
   function openCreate() {
     setEditingId(null);
     setForm(emptyForm);
+    setInitialForm(emptyForm);
     setFormOpen(true);
   }
 
   function openEdit(agreement: Agreement) {
+    const nextForm = { title: agreement.title, summary: agreement.summary, points: agreement.points.join('\n') };
     setEditingId(agreement.id);
-    setForm({ title: agreement.title, summary: agreement.summary, points: agreement.points.join('\n') });
+    setForm(nextForm);
+    setInitialForm(nextForm);
     setFormOpen(true);
   }
 
   function closeForm() {
     setFormOpen(false);
+    setDiscardConfirmationOpen(false);
     setEditingId(null);
     setForm(emptyForm);
+    setInitialForm(emptyForm);
+  }
+
+  function requestCloseForm() {
+    if (formDirty) {
+      setDiscardConfirmationOpen(true);
+      return;
+    }
+    closeForm();
   }
 
   function persist(nextAgreements: Agreement[]) {
@@ -132,7 +151,7 @@ export function AgreementSettings() {
         </div>
       )}
 
-      <Modal open={formOpen} title={editingId ? 'Edit kesepakatan' : 'Tambah kesepakatan'} description="Tulis setiap poin pada baris terpisah agar mudah dibaca." onClose={closeForm} mobileSheet>
+      <Modal open={formOpen} title={editingId ? 'Edit kesepakatan' : 'Tambah kesepakatan'} description="Tulis setiap poin pada baris terpisah agar mudah dibaca." onClose={() => discardConfirmationOpen ? undefined : requestCloseForm()} mobileSheet>
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
             <label className="form-label" htmlFor="agreement-title">Judul</label>
@@ -149,7 +168,7 @@ export function AgreementSettings() {
             <p className="mt-2 text-xs font-semibold leading-5 text-slate-400">Tekan Enter untuk membuat poin baru. Maksimal 20 poin.</p>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
-            <Button type="button" variant="secondary" className="min-h-12" onClick={closeForm}>Batal</Button>
+            <Button type="button" variant="secondary" className="min-h-12" onClick={requestCloseForm}>Batal</Button>
             <Button type="submit" className="min-h-12">{editingId ? 'Simpan perubahan' : 'Tambah kesepakatan'}</Button>
           </div>
         </form>
@@ -163,6 +182,17 @@ export function AgreementSettings() {
         tone="danger"
         onConfirm={removeAgreement}
         onClose={() => setDeleteTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={discardConfirmationOpen}
+        title="Buang perubahan?"
+        description="Perubahan pada kesepakatan ini belum disimpan. Kalau ditutup sekarang, isian terbarunya akan hilang."
+        confirmLabel="Ya, buang perubahan"
+        cancelLabel="Lanjut mengedit"
+        tone="danger"
+        onConfirm={closeForm}
+        onClose={() => setDiscardConfirmationOpen(false)}
       />
     </Card>
   );

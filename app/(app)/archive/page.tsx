@@ -13,7 +13,9 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { useToast } from '@/components/ui/ToastProvider';
 
-type RestoreTarget = { kind: 'deposit' | 'mutation'; id: string; label: string } | null;
+type RestoreTarget = { kind: 'deposit' | 'mutation'; id: string; label: string; updatedAt: string } | null;
+
+const RESTORE_CONFLICT_MESSAGE = 'Data arsip ini sudah berubah dari tab atau perangkat lain. Daftar arsip telah dimuat ulang.';
 
 function auditLabel(log: AuditLog) {
   const table = log.table_name === 'monthly_deposits' ? 'setoran' : log.table_name === 'other_mutations' ? 'cerita' : log.table_name === 'story_photos' ? 'foto cerita' : 'anggota';
@@ -83,12 +85,19 @@ export default function ArchivePage() {
       }
     }
     setRestoring(true);
-    const table = target.kind === 'deposit' ? 'monthly_deposits' : 'other_mutations';
-    const { error } = await supabase.from(table).update({ deleted_at: null, deleted_by: null }).eq('id', target.id);
+    const result = target.kind === 'deposit'
+      ? await supabase.from('monthly_deposits').update({ deleted_at: null, deleted_by: null }).eq('id', target.id).eq('updated_at', target.updatedAt).select('id').maybeSingle()
+      : await supabase.from('other_mutations').update({ deleted_at: null, deleted_by: null }).eq('id', target.id).eq('updated_at', target.updatedAt).select('id').maybeSingle();
     setRestoring(false);
 
-    if (error) {
-      toast({ title: 'Gagal memulihkan data', message: error.code === '23505' ? 'Periode setoran aktif yang sama sudah ada. Hapus data pengganti dulu sebelum memulihkan arsip.' : error.message, type: 'error' });
+    if (result.error) {
+      toast({ title: 'Gagal memulihkan data', message: result.error.code === '23505' ? 'Periode setoran aktif yang sama sudah ada. Hapus data pengganti dulu sebelum memulihkan arsip.' : result.error.message, type: 'error' });
+      return;
+    }
+    if (!result.data) {
+      setTarget(null);
+      fetchData(false);
+      toast({ title: 'Data arsip sudah berubah', message: RESTORE_CONFLICT_MESSAGE, type: 'info' });
       return;
     }
 
@@ -113,7 +122,7 @@ export default function ArchivePage() {
                 <div key={deposit.id} className="rounded-3xl bg-slate-50 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div><p className="font-bold text-slate-900">{deposit.members?.name || 'Anggota'} · {monthLabel(deposit.year, deposit.month)}</p><p className="mt-1 text-sm font-medium text-slate-500">{rupiah(deposit.paid_amount)} · dihapus {formatDate(deposit.deleted_at)}</p></div>
-                    <Button type="button" variant="secondary" disabled={!canRestoreDeposit(deposit)} onClick={() => setTarget({ kind: 'deposit', id: deposit.id, label: `Setoran ${deposit.members?.name || ''} ${monthLabel(deposit.year, deposit.month)}` })}>{canRestoreDeposit(deposit) ? 'Pulihkan' : 'Lihat saja'}</Button>
+                    <Button type="button" variant="secondary" disabled={!canRestoreDeposit(deposit)} onClick={() => setTarget({ kind: 'deposit', id: deposit.id, label: `Setoran ${deposit.members?.name || ''} ${monthLabel(deposit.year, deposit.month)}`, updatedAt: deposit.updated_at })}>{canRestoreDeposit(deposit) ? 'Pulihkan' : 'Lihat saja'}</Button>
                   </div>
                 </div>
               ))}
@@ -130,7 +139,7 @@ export default function ArchivePage() {
                 <div key={mutation.id} className="rounded-3xl bg-slate-50 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div><p className="font-bold text-slate-900">{mutation.type} · {rupiah(mutation.amount)}</p><p className="mt-1 text-sm font-medium text-slate-500">{formatDate(mutation.mutation_date)} · {mutation.description || '-'}</p></div>
-                    <Button type="button" variant="secondary" onClick={() => setTarget({ kind: 'mutation', id: mutation.id, label: `Cerita ${mutation.type} ${rupiah(mutation.amount)}` })}>Pulihkan</Button>
+                    <Button type="button" variant="secondary" onClick={() => setTarget({ kind: 'mutation', id: mutation.id, label: `Cerita ${mutation.type} ${rupiah(mutation.amount)}`, updatedAt: mutation.updated_at })}>Pulihkan</Button>
                   </div>
                 </div>
               ))}

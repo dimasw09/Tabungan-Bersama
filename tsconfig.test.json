@@ -15,6 +15,7 @@
   "include": [
     "tests/**/*.ts",
     "lib/calculations.ts",
+    "lib/dashboard.ts",
     "lib/depositStatus.ts",
     "lib/format.ts",
     "lib/loveCapsule.ts",

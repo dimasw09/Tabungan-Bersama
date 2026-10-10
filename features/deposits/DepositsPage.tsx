@@ -30,6 +30,7 @@ import { prepareImageForUpload } from '@/lib/imageProcessing';
 import { removeStoragePaths } from '@/lib/storageMedia';
 import { useProgressiveList } from '@/hooks/useProgressiveList';
 import { removeById, upsertById } from '@/lib/realtimeState';
+import { DEPOSIT_CONFLICT_MESSAGE, isPaymentDraftAffectedByChange } from '@/lib/depositConcurrency';
 
 import { LocalProofPreview, MiniSummaryCard, PaymentCard, ProofThumbnail } from './DepositCards';
 import { ALLOWED_PROOF_TYPES, MAX_PROOF_SIZE, MIN_DEPOSIT_YEAR, getPaymentDraftWarnings, shiftMonth, sortMembers, validatePaymentDraft, type ConfirmAction, type DepositRow, type PaymentDraft } from './depositModel';
@@ -48,6 +49,8 @@ export default function DepositsPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [selectedYearMonth, setSelectedYearMonth] = useState(currentYearMonth);
   const [paymentDraft, setPaymentDraft] = useState<PaymentDraft | null>(null);
+  const paymentDraftRef = useRef<PaymentDraft | null>(null);
+  const [paymentDraftConflict, setPaymentDraftConflict] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showHistoryFilter, setShowHistoryFilter] = useState(false);
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
@@ -93,6 +96,10 @@ export default function DepositsPage() {
   }, [members]);
 
   useEffect(() => {
+    paymentDraftRef.current = paymentDraft;
+  }, [paymentDraft]);
+
+  useEffect(() => {
     const refreshPeriod = () => {
       const nextPeriod = currentYearMonth();
       setToday(todayInput());
@@ -119,6 +126,8 @@ export default function DepositsPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'monthly_deposits' }, (payload) => {
         const previous = payload.old as Partial<MonthlyDeposit>;
         const next = payload.new as Partial<MonthlyDeposit>;
+        const changed = payload.eventType === 'DELETE' ? previous : next;
+        if (isPaymentDraftAffectedByChange(paymentDraftRef.current, changed)) setPaymentDraftConflict(true);
         if (payload.eventType === 'DELETE' || next.deleted_at) {
           if (previous.id || next.id) setDeposits((rows) => removeById(rows, String(previous.id || next.id)));
           return;
@@ -244,6 +253,7 @@ export default function DepositsPage() {
       toast({ title: 'Setoran hanya bisa dilihat', message: `Akun ini tidak punya izin mengubah setoran ${row.member.name}.`, type: 'info' });
       return;
     }
+    setPaymentDraftConflict(false);
     setPaymentDraft({
       member: row.member,
       deposit: row.deposit,
@@ -313,17 +323,21 @@ export default function DepositsPage() {
         required_amount: Number(draft.required_amount),
         actual_transfer_date: Number(draft.paid_amount || 0) > 0 ? draft.actual_transfer_date : null,
         paid_amount: Number(draft.paid_amount || 0),
-        proof_image_url: uploadedPath || oldPath,
+        ...(uploadedPath ? { proof_image_url: uploadedPath } : draft.deposit ? {} : { proof_image_url: null }),
         status,
         deleted_at: null,
         deleted_by: null
       };
 
       const result = draft.deposit
-        ? await supabase.from('monthly_deposits').update(payload).eq('id', draft.deposit.id).select().single()
+        ? await supabase.from('monthly_deposits').update(payload).eq('id', draft.deposit.id).eq('updated_at', draft.deposit.updated_at).select().maybeSingle()
         : await supabase.from('monthly_deposits').insert({ id: depositId, ...payload }).select().single();
 
       if (result.error) throw result.error;
+      if (!result.data) {
+        setPaymentDraftConflict(true);
+        throw new Error(DEPOSIT_CONFLICT_MESSAGE);
+      }
 
       if (uploadedPath && oldPath && oldPath !== uploadedPath && !oldPath.startsWith('http')) {
         const cleanupError = await removeStoragePaths('transfer-proofs', [oldPath]);
@@ -336,10 +350,18 @@ export default function DepositsPage() {
         type: 'success'
       });
       setPaymentDraft(null);
+      setPaymentDraftConflict(false);
       fetchData(false);
     } catch (error) {
       if (uploadedPath) await removeStoragePaths('transfer-proofs', [uploadedPath]);
-      const message = error instanceof Error ? error.message : 'Terjadi error tidak diketahui.';
+      const errorCode = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
+      const rawMessage = typeof error === 'object' && error && 'message' in error ? String(error.message) : '';
+      const isConflict = errorCode === '23505' || rawMessage === DEPOSIT_CONFLICT_MESSAGE;
+      if (isConflict) {
+        setPaymentDraftConflict(true);
+        fetchData(false);
+      }
+      const message = isConflict ? DEPOSIT_CONFLICT_MESSAGE : rawMessage || 'Terjadi error tidak diketahui.';
       toast({ title: 'Gagal simpan setoran', message, type: 'error' });
     } finally {
       setSavingDraft(false);
@@ -347,6 +369,10 @@ export default function DepositsPage() {
   }
 
   async function savePaymentDraft() {
+    if (paymentDraftConflict) {
+      toast({ title: 'Data setoran sudah berubah', message: DEPOSIT_CONFLICT_MESSAGE, type: 'info' });
+      return;
+    }
     const validationMessage = validatePaymentDraft(paymentDraft);
     if (validationMessage || !paymentDraft) {
       toast({ title: 'Data setoran belum valid', message: validationMessage || 'Setoran belum dipilih, sayang.', type: 'error' });
@@ -385,7 +411,7 @@ export default function DepositsPage() {
       tone: 'danger',
       onConfirm: async () => {
         const oldProofPath = row.proof_image_url;
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('monthly_deposits')
           .update({
             actual_transfer_date: null,
@@ -393,9 +419,16 @@ export default function DepositsPage() {
             proof_image_url: null,
             status: 'UNPAID'
           })
-          .eq('id', deposit.id);
+          .eq('id', deposit.id)
+          .eq('updated_at', deposit.updated_at)
+          .select('id')
+          .maybeSingle();
 
         if (error) throw error;
+        if (!data) {
+          fetchData(false);
+          throw new Error(DEPOSIT_CONFLICT_MESSAGE);
+        }
         let cleanupMessage: string | undefined;
         if (oldProofPath && !oldProofPath.startsWith('http')) {
           const storageError = await removeStoragePaths('transfer-proofs', [oldProofPath]);
@@ -429,8 +462,18 @@ export default function DepositsPage() {
       confirmLabel: 'Iya, hapus',
       tone: 'danger',
       onConfirm: async () => {
-        const { error } = await supabase.from('monthly_deposits').update({ deleted_at: new Date().toISOString() }).eq('id', deposit.id);
+        const { data, error } = await supabase
+          .from('monthly_deposits')
+          .update({ deleted_at: new Date().toISOString() })
+          .eq('id', deposit.id)
+          .eq('updated_at', deposit.updated_at)
+          .select('id')
+          .maybeSingle();
         if (error) throw error;
+        if (!data) {
+          fetchData(false);
+          throw new Error(DEPOSIT_CONFLICT_MESSAGE);
+        }
         toast({ title: 'Setoran berhasil dihapus', message: 'Data disimpan sebagai arsip dan tidak lagi dihitung.', type: 'success' });
         fetchData(false);
       }
@@ -701,6 +744,24 @@ export default function DepositsPage() {
       >
         {paymentDraft ? (
           <div className="space-y-5">
+            {paymentDraftConflict ? (
+              <div role="alert" className="rounded-[24px] border border-amber-200 bg-amber-50 p-4">
+                <p className="font-bold text-amber-900">Data setoran sudah berubah</p>
+                <p className="mt-1 text-sm font-medium text-amber-800">Perubahanmu belum disimpan agar data terbaru tidak tertimpa.</p>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="mt-3 min-h-10"
+                  onClick={() => {
+                    setPaymentDraft(null);
+                    setPaymentDraftConflict(false);
+                    fetchData(false);
+                  }}
+                >
+                  Tutup & muat data terbaru
+                </Button>
+              </div>
+            ) : null}
             <div className="rounded-[24px] bg-blue-50 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-[#3557bf]">Target setoran</p>
               <p className="mt-1 text-2xl font-bold text-slate-900">{rupiah(paymentDraft.required_amount)}</p>
@@ -753,7 +814,7 @@ export default function DepositsPage() {
               <Button type="button" variant="secondary" className="min-h-12" onClick={() => setPaymentDraft(null)} disabled={savingDraft}>
                 Batal
               </Button>
-              <Button type="button" className="min-h-12" onClick={savePaymentDraft} disabled={savingDraft}>
+              <Button type="button" className="min-h-12" onClick={savePaymentDraft} disabled={savingDraft || paymentDraftConflict}>
                 {savingDraft ? 'Menyimpan...' : 'Simpan setoran'}
               </Button>
             </div>
