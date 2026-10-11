@@ -35,7 +35,7 @@ export function PaymentCard({ row, onQuick, onCustom, onReset, onDelete, onPrevi
   const hasPayment = row.paid_amount > 0;
 
   return (
-    <div className="motion-card rounded-[26px] border border-slate-100 bg-white p-4 shadow-sm md:rounded-[28px] md:p-5" style={{ boxShadow: '0 12px 30px rgba(52, 77, 147, 0.10)' }}>
+    <div className="motion-card rounded-[26px] border border-slate-100 bg-white p-4 shadow-sm md:rounded-[28px] md:p-5" style={{ boxShadow: 'var(--card-shadow)' }}>
       <div className="flex items-start justify-between gap-3">
         <div><span className="badge text-slate-700" style={{ backgroundColor: row.member.color || (row.member.name === 'Mpip' ? '#E3A2C8' : '#A4BBE0') }}>{row.member.name}</span><p className="mt-3 text-[26px] font-bold leading-tight text-slate-900 md:text-2xl">{rupiah(row.required_amount)}</p><p className="mt-1 text-sm font-medium text-slate-500">Batas setor {formatDate(row.due_date)}</p></div>
         <span className={`badge ${statusBadgeClass(row.status)}`}>{depositStatusLabel(row.status)}</span>

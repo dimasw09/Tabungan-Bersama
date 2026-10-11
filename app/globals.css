@@ -91,9 +91,9 @@ input[type='date']::-webkit-calendar-picker-indicator { cursor: pointer; opacity
 
 /* Tahap 2.4 — Romantic motion system */
 @keyframes love-float {
-  0%, 100% { transform: translate3d(0, 0, 0) rotate(-8deg) scale(0.9); opacity: 0.12; }
-  35% { opacity: 0.28; }
-  50% { transform: translate3d(var(--love-drift), -28px, 0) rotate(8deg) scale(1.08); opacity: 0.2; }
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(-8deg) scale(0.9); opacity: 0.16; }
+  35% { opacity: 0.35; }
+  50% { transform: translate3d(var(--love-drift), -28px, 0) rotate(8deg) scale(1.08); opacity: 0.26; }
 }
 
 @keyframes love-orbit {
@@ -160,14 +160,29 @@ input[type='date']::-webkit-calendar-picker-indicator { cursor: pointer; opacity
   user-select: none;
 }
 
+.love-atmosphere::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle, rgba(66, 103, 214, 0.13) 1.2px, transparent 1.5px),
+    radial-gradient(circle, rgba(238, 114, 151, 0.12) 1px, transparent 1.4px),
+    linear-gradient(rgba(164, 187, 224, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(66, 103, 214, 0.035) 1px, transparent 1px);
+  background-position: 0 0, 16px 16px, 0 0, 0 0;
+  background-size: 32px 32px, 32px 32px, 64px 64px, 64px 64px;
+  opacity: 0.7;
+}
+
 .love-heart {
   position: absolute;
   left: var(--love-x);
   top: var(--love-y);
-  color: rgba(238, 114, 151, 0.72);
+  color: var(--love-color, rgba(238, 114, 151, 0.72));
   font-size: var(--love-size);
   line-height: 1;
   filter: blur(0.1px);
+  text-shadow: 0 4px 14px rgba(52, 77, 147, 0.16);
   animation: love-float var(--love-duration) ease-in-out var(--love-delay) infinite;
   will-change: transform, opacity;
 }
@@ -265,7 +280,7 @@ input[type='date']::-webkit-calendar-picker-indicator { cursor: pointer; opacity
 .login-love-card > div:first-child { overflow: hidden; position: relative; }
 
 @media (prefers-reduced-motion: reduce) {
-  .love-atmosphere { display: none; }
+  .love-heart, .love-orb { display: none; }
   .page-enter, .reveal-up, .soft-pop, .heart-beat, .progress-reveal, .nav-active-love,
   .story-card, .stagger-grid > *, .chart-line-draw, .chart-area-in, .chart-point-pop, .fab-love,
   .login-love-card, .blue-hero::after, .love-sheen::after {
@@ -341,13 +356,17 @@ input[type='date']::-webkit-calendar-picker-indicator { cursor: pointer; opacity
 }
 
 @media (max-width: 640px) {
-  .love-heart:nth-of-type(n+7) { display: none; }
+  .love-heart:nth-of-type(n+9) { display: none; }
+  .love-atmosphere::before {
+    background-size: 28px 28px, 28px 28px, 56px 56px, 56px 56px;
+    opacity: 0.5;
+  }
   .love-orb {
     width: 12rem;
     height: 12rem;
     filter: blur(28px);
     opacity: 0.12;
-    animation-duration: 20s;
+    animation: none;
   }
   .nav-active-love { animation: none; }
   .fab-love { animation: heart-beat 4.2s ease-in-out infinite; }

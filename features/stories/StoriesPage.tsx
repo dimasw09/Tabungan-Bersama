@@ -542,7 +542,7 @@ export default function MutationsPage() {
               const storyPhotos = photosByMutation.get(mutation.id) || [];
               const title = storyTitle(mutation);
               return (
-                <article key={mutation.id} className="story-card relative overflow-visible rounded-[28px] border border-slate-100 bg-white p-3 shadow-sm" style={{ boxShadow: '0 12px 30px rgba(52, 77, 147, 0.10)' }}>
+                <article key={mutation.id} className="story-card relative overflow-visible rounded-[28px] border border-slate-100 bg-white p-3 shadow-sm" style={{ boxShadow: 'var(--card-shadow)' }}>
                   <StoryAlbumCollage photos={storyPhotos} title={title} onOpen={(index) => openPhotoViewer(storyPhotos, index, title)} />
                   <div className="p-2 pb-1 pt-4">
                     <div className="flex items-start justify-between gap-3">
